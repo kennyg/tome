@@ -1,0 +1,30 @@
+[tools]
+go = "1.23"
+task = "latest"
+
+[env]
+GOBIN = "{{config_root}}/bin"
+
+[tasks.build]
+description = "Build the tome binary"
+run = "go build -o bin/tome ."
+
+[tasks.dev]
+description = "Run tome in development mode"
+run = "go run . {{arg(i=0, name='args')}}"
+
+[tasks.test]
+description = "Run tests"
+run = "go test ./..."
+
+[tasks.lint]
+description = "Run linter"
+run = "golangci-lint run"
+
+[tasks.fmt]
+description = "Format code"
+run = "go fmt ./..."
+
+[tasks.install]
+description = "Install tome to GOBIN"
+run = "go install ."
