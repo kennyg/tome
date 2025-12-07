@@ -324,32 +324,73 @@ func ParseAgent(content []byte, filename string, sourceURL string) (*artifact.Ar
 	}, nil
 }
 
-// HookDefinition represents a hook in hooks.json
-type HookDefinition struct {
-	Matcher string   `json:"matcher"`
-	Hooks   []string `json:"hooks"`
+// ClaudeHooksJSON represents the top-level structure of Claude's hooks.json format
+type ClaudeHooksJSON struct {
+	Hooks map[string][]ClaudeHookMatcher `json:"hooks"`
 }
 
-// ParseHooksJSON parses a hooks.json file
+// ClaudeHookMatcher represents a matcher within an event
+type ClaudeHookMatcher struct {
+	Matcher string            `json:"matcher"`
+	Hooks   []ClaudeHookEntry `json:"hooks"`
+}
+
+// ClaudeHookEntry represents an individual hook entry
+type ClaudeHookEntry struct {
+	Type    string `json:"type"`
+	Command string `json:"command,omitempty"`
+	Prompt  string `json:"prompt,omitempty"`
+	Timeout int    `json:"timeout,omitempty"`
+}
+
+// ParseHooksJSON parses a hooks.json file in Claude's format
 func ParseHooksJSON(content []byte, sourceURL string) ([]artifact.Artifact, error) {
-	var hookDefs []HookDefinition
-	if err := json.Unmarshal(content, &hookDefs); err != nil {
+	var claudeHooks ClaudeHooksJSON
+	if err := json.Unmarshal(content, &claudeHooks); err != nil {
 		return nil, fmt.Errorf("failed to parse hooks.json: %w", err)
 	}
 
 	var hooks []artifact.Artifact
-	for _, def := range hookDefs {
-		for i, hookCmd := range def.Hooks {
-			hooks = append(hooks, artifact.Artifact{
-				Name:        fmt.Sprintf("%s-hook-%d", def.Matcher, i+1),
-				Type:        artifact.TypeHook,
-				Description: fmt.Sprintf("Hook for %s", def.Matcher),
-				Event:       def.Matcher,
-				Command:     hookCmd,
-				SourceURL:   sourceURL,
-				Content:     string(content),
-				Filename:    "hooks.json",
-			})
+
+	// Iterate through each event type (PreToolUse, PostToolUse, etc.)
+	for eventName, matchers := range claudeHooks.Hooks {
+		// Iterate through each matcher for this event
+		for matcherIdx, matcher := range matchers {
+			// Iterate through each hook entry for this matcher
+			for hookIdx, hookEntry := range matcher.Hooks {
+				// Determine the command/content based on hook type
+				var command string
+				var description string
+
+				switch hookEntry.Type {
+				case "command":
+					command = hookEntry.Command
+					description = fmt.Sprintf("%s hook: %s (matcher: %s)", eventName, hookEntry.Command, matcher.Matcher)
+				case "prompt":
+					command = hookEntry.Prompt
+					description = fmt.Sprintf("%s hook: prompt (matcher: %s)", eventName, matcher.Matcher)
+				default:
+					// Unknown type, skip
+					continue
+				}
+
+				// Create a meaningful name
+				name := fmt.Sprintf("%s-%s-%d-%d", eventName, matcher.Matcher, matcherIdx+1, hookIdx+1)
+				// Sanitize name (replace pipe characters and spaces)
+				name = strings.ReplaceAll(name, "|", "-")
+				name = strings.ReplaceAll(name, " ", "-")
+
+				hooks = append(hooks, artifact.Artifact{
+					Name:        name,
+					Type:        artifact.TypeHook,
+					Description: description,
+					Event:       eventName,
+					Command:     command,
+					SourceURL:   sourceURL,
+					Content:     string(content),
+					Filename:    "hooks.json",
+				})
+			}
 		}
 	}
 

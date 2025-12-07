@@ -18,15 +18,31 @@ const (
 	AgentAmp      Agent = "amp"
 )
 
-// AgentCapabilities tracks what features an agent supports
+// AgentCapabilities tracks what artifact types Tome supports installing for each agent.
+//
+// This matrix represents Tome's current implementation support, NOT the agent's native
+// capabilities. For example:
+//   - Cursor natively supports .cursorrules (similar to skills), but Tome doesn't
+//     convert to that format yet, so Skills=false
+//   - GitHub Copilot uses copilot-instructions.md, not SKILL.md, so Skills=false
+//   - An agent might support MCP natively but Tome doesn't handle MCP installation
+//
+// The fields indicate whether Tome can:
+//   - Install artifacts of that type to the agent's directory structure
+//   - Use the agent's native format for that artifact type
+//
+// Note: The actual capability checks in the code primarily use empty/non-empty
+// directory field strings (e.g., agentCfg.AgentsDir != "") rather than these booleans.
+// This struct serves as documentation of Tome's support matrix and may be used for
+// future feature validation.
 type AgentCapabilities struct {
-	Skills   bool // SKILL.md files
-	Commands bool // Slash commands (.md files)
-	Prompts  bool // Prompt templates
-	Hooks    bool // Event hooks (hooks.json)
-	Agents   bool // Agent definitions
+	Skills   bool // SKILL.md files in skills/
+	Commands bool // Slash commands (.md files) in commands/
+	Prompts  bool // Prompt templates in prompts/
+	Hooks    bool // Event hooks (hooks.json) in hooks/
+	Agents   bool // Agent definitions (.md files) in agents/
 	Plugins  bool // Full plugin format (.claude-plugin/)
-	MCP      bool // Model Context Protocol
+	MCP      bool // Model Context Protocol servers
 }
 
 // AgentConfig holds the configuration for a specific agent
