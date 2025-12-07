@@ -57,10 +57,5 @@ release:
   prerelease: auto
   name_template: "v{{.Version}}"
 
-homebrew_casks:
-  - repository:
-      owner: kennyg
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    homepage: "https://github.com/kennyg/tome"
-    description: "AI Agent Skill Manager - Your spellbook for AI agent capabilities"
+# Note: Homebrew formula is maintained manually in kennyg/homebrew-tap
+# Building from source avoids macOS notarization requirements
