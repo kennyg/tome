@@ -230,7 +230,13 @@ func Flourish() string {
 }
 
 // SectionHeader creates a decorated section header
-func SectionHeader(title string, width int) string {
+func SectionHeader(title string, _ int) string {
+	// Use terminal width, capped at 80
+	width := TerminalWidth()
+	if width > 80 {
+		width = 80
+	}
+
 	titleStyled := lipgloss.NewStyle().
 		Foreground(Gold).
 		Bold(true).
@@ -465,7 +471,15 @@ func PageHeader(title string) string {
 	return fmt.Sprintf("\n  %s %s\n", icon, titleStyled)
 }
 
-// PageFooter creates a consistent page footer
+// PageFooter creates a consistent page footer matching the header width
 func PageFooter() string {
-	return lipgloss.NewStyle().Foreground(DarkGray).Render("\n  ─── ✦ ───\n")
+	width := TerminalWidth()
+	if width > 80 {
+		width = 80
+	}
+	padSide := (width - 5) / 2 // 5 = " ✦ " with spaces
+	left := strings.Repeat("─", padSide)
+	right := strings.Repeat("─", width-padSide-5)
+	line := lipgloss.NewStyle().Foreground(DarkGray).Render(left + " ✦ " + right)
+	return "\n" + line + "\n"
 }
