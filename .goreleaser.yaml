@@ -61,5 +61,6 @@ homebrew_casks:
   - repository:
       owner: kennyg
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: "https://github.com/kennyg/tome"
     description: "AI Agent Skill Manager - Your spellbook for AI agent capabilities"
