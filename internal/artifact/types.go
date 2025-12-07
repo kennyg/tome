@@ -34,7 +34,8 @@ type Artifact struct {
 	UpdatedAt   time.Time `yaml:"-" json:"updated_at,omitempty"`
 
 	// Skill-specific fields
-	Globs []string `yaml:"globs,omitempty" json:"globs,omitempty"`
+	Globs    []string `yaml:"globs,omitempty" json:"globs,omitempty"`
+	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"` // Additional files to install
 
 	// Command-specific fields
 	Arguments []Argument `yaml:"arguments,omitempty" json:"arguments,omitempty"`

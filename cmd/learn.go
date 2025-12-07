@@ -200,8 +200,19 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 			continue
 		}
 
+		// Fetch includes for skills
+		var includes []fetch.IncludedFile
+		if art.Type == artifact.TypeSkill && len(art.Includes) > 0 {
+			apiURL := src.GitHubAPIURL()
+			includes, err = client.FetchSkillIncludes(apiURL, item.SkillDir, art.Includes)
+			if err != nil {
+				fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipping %s: %v", item.Name, err)))
+				continue
+			}
+		}
+
 		art.Source = src.String()
-		installArtifactQuiet(art, paths)
+		installArtifactQuietWithIncludes(art, paths, includes)
 		installed = append(installed, art.Name)
 	}
 
@@ -358,13 +369,28 @@ func installArtifact(art *artifact.Artifact, paths *config.Paths) {
 }
 
 func installArtifactQuiet(art *artifact.Artifact, paths *config.Paths) {
-	doInstall(art, paths)
+	doInstallWithIncludes(art, paths, nil)
 
 	badge := getBadge(art.Type)
 	fmt.Printf("  %s %s\n", badge, ui.Highlight.Render(art.Name))
 }
 
+func installArtifactQuietWithIncludes(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile) {
+	doInstallWithIncludes(art, paths, includes)
+
+	badge := getBadge(art.Type)
+	name := art.Name
+	if len(includes) > 0 {
+		name = fmt.Sprintf("%s (+%d files)", art.Name, len(includes))
+	}
+	fmt.Printf("  %s %s\n", badge, ui.Highlight.Render(name))
+}
+
 func doInstall(art *artifact.Artifact, paths *config.Paths) {
+	doInstallWithIncludes(art, paths, nil)
+}
+
+func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile) {
 	installPath := getInstallPath(art, paths)
 	installDir := filepath.Dir(installPath)
 
@@ -373,9 +399,28 @@ func doInstall(art *artifact.Artifact, paths *config.Paths) {
 		exitWithError(fmt.Sprintf("failed to create directory: %v", err))
 	}
 
-	// Write the file
+	// Write the main file
 	if err := os.WriteFile(installPath, []byte(art.Content), 0644); err != nil {
 		exitWithError(fmt.Sprintf("failed to write file: %v", err))
+	}
+
+	// Write included files (for skills)
+	if art.Type == artifact.TypeSkill && len(includes) > 0 {
+		skillDir := filepath.Dir(installPath)
+		for _, inc := range includes {
+			incPath := filepath.Join(skillDir, inc.Path)
+			incDir := filepath.Dir(incPath)
+
+			// Create subdirectory if needed
+			if err := os.MkdirAll(incDir, 0755); err != nil {
+				exitWithError(fmt.Sprintf("failed to create directory for %s: %v", inc.Path, err))
+			}
+
+			// Write the included file
+			if err := os.WriteFile(incPath, inc.Content, 0644); err != nil {
+				exitWithError(fmt.Sprintf("failed to write %s: %v", inc.Path, err))
+			}
+		}
 	}
 
 	// Update state

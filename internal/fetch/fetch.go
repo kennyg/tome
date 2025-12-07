@@ -125,6 +125,7 @@ type GitHubContent struct {
 	Path        string `json:"path"`
 	Type        string `json:"type"` // "file" or "dir"
 	DownloadURL string `json:"download_url"`
+	SkillDir    string `json:"-"` // For skills: the directory containing SKILL.md
 }
 
 // ListGitHubContents lists files in a GitHub directory
@@ -236,6 +237,8 @@ func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 						if err == nil {
 							for _, skillFile := range skillContents {
 								if skillFile.Type == "file" && strings.ToUpper(skillFile.Name) == "SKILL.MD" {
+									// Track the skill directory for fetching includes
+									skillFile.SkillDir = "skills/" + sub.Name
 									artifacts = append(artifacts, skillFile)
 								}
 							}
@@ -295,6 +298,86 @@ type Frontmatter struct {
 	Version     string   `yaml:"version,omitempty"`
 	Author      string   `yaml:"author,omitempty"`
 	Globs       []string `yaml:"globs,omitempty"`
+	Includes    []string `yaml:"includes,omitempty"` // Additional files to install with this skill
+}
+
+// Allowed file extensions for skill includes (security whitelist)
+var allowedExtensions = map[string]bool{
+	".md":   true,
+	".txt":  true,
+	".json": true,
+	".yaml": true,
+	".yml":  true,
+	".toml": true,
+	".tmpl": true,
+}
+
+// ValidateIncludePath checks if an include path is safe
+func ValidateIncludePath(path string) error {
+	// No absolute paths
+	if strings.HasPrefix(path, "/") {
+		return fmt.Errorf("absolute paths not allowed: %s", path)
+	}
+	// No parent directory traversal
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("path traversal not allowed: %s", path)
+	}
+	// Check extension whitelist
+	ext := strings.ToLower(filepath.Ext(path))
+	if !allowedExtensions[ext] {
+		return fmt.Errorf("file type not allowed: %s (allowed: .md, .txt, .json, .yaml, .yml, .toml, .tmpl)", ext)
+	}
+	return nil
+}
+
+// IncludedFile represents an additional file to install with a skill
+type IncludedFile struct {
+	Path    string // Relative path within skill directory
+	Content []byte
+}
+
+// MaxIncludeFileSize is the maximum size for an included file (100KB)
+const MaxIncludeFileSize = 100 * 1024
+
+// MaxTotalIncludeSize is the maximum total size for all includes (1MB)
+const MaxTotalIncludeSize = 1024 * 1024
+
+// FetchSkillIncludes fetches additional files declared in a skill's includes
+func (c *Client) FetchSkillIncludes(baseURL string, skillDir string, includes []string) ([]IncludedFile, error) {
+	var files []IncludedFile
+	var totalSize int64
+
+	for _, inc := range includes {
+		// Build URL for the include file
+		incURL := baseURL
+		if skillDir != "" {
+			incURL = appendPath(baseURL, skillDir)
+		}
+		incURL = appendPath(incURL, inc)
+
+		// Fetch the file
+		content, err := c.FetchURL(incURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch include %s: %w", inc, err)
+		}
+
+		// Check file size
+		if len(content) > MaxIncludeFileSize {
+			return nil, fmt.Errorf("include %s exceeds max size (%d > %d bytes)", inc, len(content), MaxIncludeFileSize)
+		}
+
+		totalSize += int64(len(content))
+		if totalSize > MaxTotalIncludeSize {
+			return nil, fmt.Errorf("total include size exceeds max (%d > %d bytes)", totalSize, MaxTotalIncludeSize)
+		}
+
+		files = append(files, IncludedFile{
+			Path:    inc,
+			Content: content,
+		})
+	}
+
+	return files, nil
 }
 
 // ParseSkill parses a SKILL.md file and returns an artifact
@@ -315,6 +398,15 @@ func ParseSkill(content []byte, sourceURL string) (*artifact.Artifact, error) {
 		description = extractDescriptionFromContent(body)
 	}
 
+	// Validate includes
+	var validIncludes []string
+	for _, inc := range fm.Includes {
+		if err := ValidateIncludePath(inc); err != nil {
+			return nil, fmt.Errorf("invalid include: %w", err)
+		}
+		validIncludes = append(validIncludes, inc)
+	}
+
 	return &artifact.Artifact{
 		Name:        name,
 		Type:        artifact.TypeSkill,
@@ -322,6 +414,7 @@ func ParseSkill(content []byte, sourceURL string) (*artifact.Artifact, error) {
 		Version:     fm.Version,
 		Author:      fm.Author,
 		Globs:       fm.Globs,
+		Includes:    validIncludes,
 		SourceURL:   sourceURL,
 		Content:     string(content),
 		Filename:    "SKILL.md",
