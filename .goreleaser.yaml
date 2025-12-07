@@ -57,10 +57,12 @@ release:
   prerelease: auto
   name_template: "v{{.Version}}"
 
-brews:
+homebrew_casks:
   - name: tome
     ids:
       - default
+    binaries:
+      - tome
     repository:
       owner: kennyg
       name: homebrew-tap
@@ -68,11 +70,5 @@ brews:
     commit_author:
       name: Kenny Gatdula
       email: kenny@kennyg.com
-    directory: Formula
     homepage: https://github.com/kennyg/tome
     description: AI Agent Skill Manager - Your spellbook for AI agent capabilities
-    license: MIT
-    install: |
-      bin.install "tome"
-    test: |
-      system "#{bin}/tome", "version"
