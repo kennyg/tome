@@ -96,9 +96,10 @@ func runList(cmd *cobra.Command, args []string) {
 		fmt.Printf("  %s %s\n", badge, count)
 		fmt.Println()
 
+		descWidth := ui.DescriptionWidth()
 		for _, a := range artifacts {
 			name := lipgloss.NewStyle().Foreground(ui.White).Bold(true).Render(a.Name)
-			desc := ui.Truncate(a.Description, 80)
+			desc := ui.Truncate(a.Description, descWidth)
 			descStyled := lipgloss.NewStyle().Foreground(ui.Gray).Render(desc)
 			fmt.Printf("    %s\n", name)
 			fmt.Printf("    %s\n", descStyled)

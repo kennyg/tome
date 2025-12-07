@@ -2,9 +2,11 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/term"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -401,6 +403,29 @@ func Truncate(text string, max int) string {
 		return text
 	}
 	return text[:max-3] + "..."
+}
+
+// TerminalWidth returns the current terminal width, defaulting to 80 if unknown
+func TerminalWidth() int {
+	w, _, err := term.GetSize(os.Stdout.Fd())
+	if err != nil || w <= 0 {
+		return 80
+	}
+	return w
+}
+
+// DescriptionWidth returns the recommended width for descriptions based on terminal size
+func DescriptionWidth() int {
+	w := TerminalWidth()
+	// Account for indentation (4 chars) and some margin
+	desc := w - 8
+	if desc < 40 {
+		return 40
+	}
+	if desc > 200 {
+		return 200
+	}
+	return desc
 }
 
 // Box wraps content in a styled box
