@@ -1,6 +1,5 @@
 [tools]
-go = "1.23"
-task = "latest"
+go = "1.24"
 
 [env]
 GOBIN = "{{config_root}}/bin"
