@@ -17,9 +17,10 @@ import (
 )
 
 var learnCmd = &cobra.Command{
-	Use:   "learn <source>",
-	Short: "Learn a new skill, command, or prompt",
-	Long: `Learn (install) artifacts from various sources.
+	Use:     "learn <source>",
+	Aliases: []string{"inscribe", "add", "install"},
+	Short:   "Inscribe a new artifact into the tome",
+	Long: `Learn and inscribe artifacts from various sources.
 
 Sources can be:
   owner/repo              GitHub repository (installs all artifacts)
@@ -34,7 +35,7 @@ Artifact types are auto-detected:
 
 Examples:
   tome learn kennyg/yegges-tips                    # All commands from repo
-  tome learn steveyegge/beads:examples/claude-code-skill  # Specific skill
+  tome inscribe steveyegge/beads:examples/claude-code-skill
   tome learn https://raw.githubusercontent.com/.../SKILL.md
   tome learn ./my-local-skill`,
 	Args: cobra.ExactArgs(1),

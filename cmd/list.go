@@ -11,10 +11,11 @@ import (
 )
 
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List installed artifacts",
-	Long:  `Display all installed skills, commands, prompts, and hooks.`,
-	Run:   runList,
+	Use:     "index",
+	Aliases: []string{"contents", "list", "ls"},
+	Short:   "View the tome's index",
+	Long:    `Display all inscribed skills, commands, prompts, and hooks.`,
+	Run:     runList,
 }
 
 var (

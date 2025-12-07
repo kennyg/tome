@@ -10,9 +10,10 @@ import (
 )
 
 var infoCmd = &cobra.Command{
-	Use:   "info <name>",
-	Short: "Show details about an artifact",
-	Long: `Display detailed information about an installed artifact.
+	Use:     "study <name>",
+	Aliases: []string{"examine", "info"},
+	Short:   "Study an artifact in detail",
+	Long: `Examine the details of an inscribed artifact.
 
 Shows metadata, source, installation date, and contents.`,
 	Args: cobra.ExactArgs(1),

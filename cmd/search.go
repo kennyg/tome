@@ -12,16 +12,17 @@ import (
 )
 
 var searchCmd = &cobra.Command{
-	Use:   "search <query>",
-	Short: "Search for artifacts",
-	Long: `Search for skills, commands, and prompts.
+	Use:     "seek <query>",
+	Aliases: []string{"scry", "divine", "search", "find"},
+	Short:   "Seek artifacts in the archives",
+	Long: `Seek skills, commands, and prompts in the archives.
 
-Searches GitHub for repositories containing Claude Code artifacts.
+Searches GitHub for repositories containing artifacts.
 
 Examples:
-  tome search memory
-  tome search "code review"
-  tome search deploy`,
+  tome seek memory
+  tome seek "code review"
+  tome scry deploy`,
 	Args: cobra.MinimumNArgs(1),
 	Run:  runSearch,
 }

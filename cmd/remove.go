@@ -13,14 +13,14 @@ import (
 )
 
 var removeCmd = &cobra.Command{
-	Use:     "remove <name>",
-	Aliases: []string{"rm", "unlearn", "forget"},
-	Short:   "Remove an installed artifact",
-	Long: `Remove (uninstall) an artifact from your tome.
+	Use:     "forget <name>",
+	Aliases: []string{"erase", "unlearn", "remove", "rm"},
+	Short:   "Erase an inscription from the tome",
+	Long: `Forget an artifact, erasing it from your tome.
 
 Examples:
-  tome remove my-skill
-  tome forget deploy-command`,
+  tome forget my-skill
+  tome erase deploy-command`,
 	Args: cobra.ExactArgs(1),
 	Run:  runRemove,
 }

@@ -43,8 +43,9 @@ func init() {
 }
 
 var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print the version",
+	Use:     "edition",
+	Aliases: []string{"version", "ver"},
+	Short:   "Show the tome's edition",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("tome %s\n", Version)
 	},

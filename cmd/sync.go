@@ -17,9 +17,10 @@ import (
 )
 
 var syncCmd = &cobra.Command{
-	Use:   "sync",
-	Short: "Update all installed artifacts",
-	Long: `Sync all installed artifacts with their sources.
+	Use:     "renew",
+	Aliases: []string{"refresh", "sync", "update"},
+	Short:   "Renew inscriptions from their sources",
+	Long: `Renew all inscribed artifacts from their original sources.
 
 Checks for updates and downloads newer versions if available.`,
 	Run: runSync,
