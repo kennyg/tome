@@ -176,6 +176,18 @@ func (c *Client) listWithGH(apiURL string) ([]GitHubContent, error) {
 	return contents, nil
 }
 
+// appendPath appends a path segment to a URL, handling query strings properly
+func appendPath(baseURL, segment string) string {
+	// Split URL and query string
+	parts := strings.SplitN(baseURL, "?", 2)
+	base := parts[0]
+	query := ""
+	if len(parts) > 1 {
+		query = "?" + parts[1]
+	}
+	return base + "/" + segment + query
+}
+
 // FindArtifacts finds all artifact files in a GitHub directory
 func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 	contents, err := c.ListGitHubContents(apiURL)
@@ -184,9 +196,54 @@ func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 	}
 
 	var artifacts []GitHubContent
+
 	for _, item := range contents {
+		// Direct artifact files at root
 		if item.Type == "file" && IsArtifactFile(item.Name) {
 			artifacts = append(artifacts, item)
+			continue
+		}
+
+		// Scan commands/ directory for .md files
+		if item.Type == "dir" && item.Name == "commands" {
+			subURL := appendPath(apiURL, "commands")
+			subContents, err := c.ListGitHubContents(subURL)
+			if err == nil {
+				for _, sub := range subContents {
+					if sub.Type == "file" && strings.HasSuffix(strings.ToLower(sub.Name), ".md") {
+						artifacts = append(artifacts, sub)
+					}
+				}
+			}
+			continue
+		}
+
+		// Scan skills/ directory for skill subdirectories with SKILL.md
+		if item.Type == "dir" && item.Name == "skills" {
+			subURL := appendPath(apiURL, "skills")
+			subContents, err := c.ListGitHubContents(subURL)
+			if err == nil {
+				for _, sub := range subContents {
+					// Check for SKILL.md directly in skills/ (flat structure)
+					if sub.Type == "file" && strings.ToUpper(sub.Name) == "SKILL.MD" {
+						artifacts = append(artifacts, sub)
+						continue
+					}
+					// Check for skill subdirectories with SKILL.md
+					if sub.Type == "dir" {
+						skillURL := appendPath(subURL, sub.Name)
+						skillContents, err := c.ListGitHubContents(skillURL)
+						if err == nil {
+							for _, skillFile := range skillContents {
+								if skillFile.Type == "file" && strings.ToUpper(skillFile.Name) == "SKILL.MD" {
+									artifacts = append(artifacts, skillFile)
+								}
+							}
+						}
+					}
+				}
+			}
+			continue
 		}
 	}
 
