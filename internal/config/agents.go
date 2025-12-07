@@ -22,6 +22,7 @@ const (
 type AgentCapabilities struct {
 	Skills   bool // SKILL.md files
 	Commands bool // Slash commands (.md files)
+	Prompts  bool // Prompt templates
 	Hooks    bool // Event hooks (hooks.json)
 	Agents   bool // Agent definitions
 	Plugins  bool // Full plugin format (.claude-plugin/)
@@ -35,6 +36,7 @@ type AgentConfig struct {
 	ConfigDir    string // Relative to home, e.g., ".claude"
 	SkillsDir    string // Relative to ConfigDir
 	CommandsDir  string // Relative to ConfigDir
+	PromptsDir   string // Relative to ConfigDir (if supported)
 	HooksDir     string // Relative to ConfigDir (if supported)
 	AgentsDir    string // Relative to ConfigDir (if supported)
 	PluginsDir   string // Relative to ConfigDir (if supported)
@@ -50,12 +52,14 @@ func KnownAgents() []AgentConfig {
 			ConfigDir:   ".claude",
 			SkillsDir:   "skills",
 			CommandsDir: "commands",
+			PromptsDir:  "prompts",
 			HooksDir:    "hooks",
 			AgentsDir:   "agents",
 			PluginsDir:  "plugins",
 			Capabilities: AgentCapabilities{
 				Skills:   true,
 				Commands: true,
+				Prompts:  true,
 				Hooks:    true,
 				Agents:   true,
 				Plugins:  true,
@@ -71,7 +75,8 @@ func KnownAgents() []AgentConfig {
 			Capabilities: AgentCapabilities{
 				Skills:   true,
 				Commands: true,
-				Hooks:    false, // Not yet supported
+				Prompts:  false,
+				Hooks:    false,
 				Agents:   false,
 				Plugins:  false,
 				MCP:      true,
@@ -86,6 +91,7 @@ func KnownAgents() []AgentConfig {
 			Capabilities: AgentCapabilities{
 				Skills:   false, // Uses different format
 				Commands: false,
+				Prompts:  false,
 				Hooks:    false,
 				Agents:   false,
 				Plugins:  false,
@@ -101,6 +107,7 @@ func KnownAgents() []AgentConfig {
 			Capabilities: AgentCapabilities{
 				Skills:   false, // Uses different format
 				Commands: false,
+				Prompts:  false,
 				Hooks:    false,
 				Agents:   false,
 				Plugins:  false,
@@ -116,6 +123,7 @@ func KnownAgents() []AgentConfig {
 			Capabilities: AgentCapabilities{
 				Skills:   true,
 				Commands: true,
+				Prompts:  false,
 				Hooks:    false,
 				Agents:   false,
 				Plugins:  false,
@@ -131,6 +139,7 @@ func KnownAgents() []AgentConfig {
 			Capabilities: AgentCapabilities{
 				Skills:   false, // TODO: Research
 				Commands: false,
+				Prompts:  false,
 				Hooks:    false,
 				Agents:   false,
 				Plugins:  false,
@@ -146,6 +155,7 @@ func KnownAgents() []AgentConfig {
 			Capabilities: AgentCapabilities{
 				Skills:   false, // TODO: Research
 				Commands: false,
+				Prompts:  false,
 				Hooks:    false,
 				Agents:   false,
 				Plugins:  false,
