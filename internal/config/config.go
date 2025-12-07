@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -87,28 +88,37 @@ func GetPathsForAgent(agent Agent) (*Paths, error) {
 
 // findProjectConfig looks for .config/tome in the current directory or parents
 func findProjectConfig() string {
+	projectRoot := findProjectRoot()
+	if projectRoot == "" {
+		return ""
+	}
+	candidate := filepath.Join(projectRoot, ".config", ConfigDir)
+	if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+		return candidate
+	}
+	return ""
+}
+
+// findProjectRoot finds the project root by looking for .config/tome or .git
+func findProjectRoot() string {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return ""
 	}
 
-	// Walk up the directory tree looking for .config/tome
+	// Walk up the directory tree
 	dir := cwd
 	for {
+		// Check for .config/tome (attuned project)
 		candidate := filepath.Join(dir, ".config", ConfigDir)
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate
+			return dir
 		}
 
 		// Also check for .git to stop at repo root
 		gitDir := filepath.Join(dir, ".git")
 		if _, err := os.Stat(gitDir); err == nil {
-			// We're at repo root, check one more time then stop
-			candidate := filepath.Join(dir, ".config", ConfigDir)
-			if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-				return candidate
-			}
-			break
+			return dir
 		}
 
 		parent := filepath.Dir(dir)
@@ -119,6 +129,68 @@ func findProjectConfig() string {
 	}
 
 	return ""
+}
+
+// IsAttuned returns true if we're in an attuned project with local agent dirs
+func IsAttuned(agent Agent) bool {
+	projectRoot := findProjectRoot()
+	if projectRoot == "" {
+		return false
+	}
+
+	cfg := GetAgentConfig(agent)
+	if cfg == nil {
+		return false
+	}
+
+	// Check if project has local agent directories
+	skillsDir := filepath.Join(projectRoot, cfg.ConfigDir, cfg.SkillsDir)
+	if _, err := os.Stat(skillsDir); err != nil {
+		return false
+	}
+
+	return true
+}
+
+// GetLocalPaths returns paths for project-local installation
+func GetLocalPaths(agent Agent) (*Paths, error) {
+	projectRoot := findProjectRoot()
+	if projectRoot == "" {
+		return nil, fmt.Errorf("not in a project directory")
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	// Follow XDG Base Directory spec for user config
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if configHome == "" {
+		configHome = filepath.Join(home, ".config")
+	}
+	userConfigDir := filepath.Join(configHome, ConfigDir)
+
+	cfg := GetAgentConfig(agent)
+	if cfg == nil {
+		cfg = GetAgentConfig(AgentClaude)
+	}
+
+	// Project-local paths
+	agentDir := filepath.Join(projectRoot, cfg.ConfigDir)
+	skillsDir := filepath.Join(agentDir, cfg.SkillsDir)
+	commandsDir := filepath.Join(agentDir, cfg.CommandsDir)
+
+	return &Paths{
+		Home:             home,
+		UserConfigDir:    userConfigDir,
+		StateFile:        filepath.Join(userConfigDir, StateFile),
+		ProjectConfigDir: filepath.Join(projectRoot, ".config", ConfigDir),
+		Agent:            agent,
+		AgentDir:         agentDir,
+		SkillsDir:        skillsDir,
+		CommandsDir:      commandsDir,
+	}, nil
 }
 
 // EnsureDirs creates all necessary directories

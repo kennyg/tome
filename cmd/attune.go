@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kennyg/tome/internal/config"
 	"github.com/kennyg/tome/internal/ui"
 )
 
@@ -57,6 +58,23 @@ func runAttune(cmd *cobra.Command, args []string) {
 		exitWithError(fmt.Sprintf("failed to create config directory: %v", err))
 	}
 	fmt.Println(ui.Success.Render("  Created .config/tome/"))
+
+	// Determine which agent to set up for
+	agent := config.DefaultAgent()
+	agentCfg := config.GetAgentConfig(agent)
+
+	// Create project-local agent directories for artifact installation
+	agentDir := filepath.Join(cwd, agentCfg.ConfigDir)
+	skillsDir := filepath.Join(agentDir, agentCfg.SkillsDir)
+	commandsDir := filepath.Join(agentDir, agentCfg.CommandsDir)
+
+	if err := os.MkdirAll(skillsDir, 0755); err != nil {
+		exitWithError(fmt.Sprintf("failed to create skills directory: %v", err))
+	}
+	if err := os.MkdirAll(commandsDir, 0755); err != nil {
+		exitWithError(fmt.Sprintf("failed to create commands directory: %v", err))
+	}
+	fmt.Println(ui.Success.Render(fmt.Sprintf("  Created %s/skills/ and %s/commands/", agentCfg.ConfigDir, agentCfg.ConfigDir)))
 
 	// Create .gitkeep in config dir
 	gitkeepPath := filepath.Join(configDir, ".gitkeep")

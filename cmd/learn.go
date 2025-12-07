@@ -48,7 +48,7 @@ var (
 )
 
 func init() {
-	learnCmd.Flags().BoolVarP(&learnGlobal, "global", "g", true, "Install globally (default)")
+	learnCmd.Flags().BoolVarP(&learnGlobal, "global", "g", false, "Install globally to ~/.<agent>/ instead of project-local")
 	learnCmd.Flags().StringVarP(&learnAgent, "agent", "a", "", "Target agent (claude, opencode, crush, cursor, windsurf)")
 }
 
@@ -73,13 +73,36 @@ func runLearn(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	paths, err := config.GetPathsForAgent(agent)
-	if err != nil {
-		exitWithError(err.Error())
+	// Determine paths: local by default if attuned, global with --global flag
+	var paths *config.Paths
+	var installLocation string
+
+	if learnGlobal {
+		// Explicit global install
+		paths, err = config.GetPathsForAgent(agent)
+		if err != nil {
+			exitWithError(err.Error())
+		}
+		installLocation = "global"
+	} else if config.IsAttuned(agent) {
+		// Project-local install (default when attuned)
+		paths, err = config.GetLocalPaths(agent)
+		if err != nil {
+			exitWithError(err.Error())
+		}
+		installLocation = "project"
+	} else {
+		// Not attuned, fall back to global
+		paths, err = config.GetPathsForAgent(agent)
+		if err != nil {
+			exitWithError(err.Error())
+		}
+		installLocation = "global"
 	}
 
 	agentCfg := config.GetAgentConfig(agent)
-	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Target agent: %s", agentCfg.DisplayName)))
+	locationInfo := fmt.Sprintf("  Target: %s (%s)", agentCfg.DisplayName, installLocation)
+	fmt.Println(ui.Muted.Render(locationInfo))
 	fmt.Println()
 
 	// Ensure directories exist
