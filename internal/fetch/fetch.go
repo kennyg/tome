@@ -306,11 +306,19 @@ func extractNameFromContent(body string) string {
 
 // extractDescriptionFromContent tries to extract a description
 func extractDescriptionFromContent(body string) string {
-	// Look for first non-empty, non-heading paragraph
+	// Look for first non-empty, non-heading, non-bullet paragraph
 	lines := strings.Split(body, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
+		// Skip empty lines, headings, bullets, numbered lists, code blocks, horizontal rules
+		if line == "" ||
+			strings.HasPrefix(line, "#") ||
+			strings.HasPrefix(line, "- ") ||
+			strings.HasPrefix(line, "* ") ||
+			strings.HasPrefix(line, "> ") ||
+			strings.HasPrefix(line, "```") ||
+			strings.HasPrefix(line, "---") ||
+			(len(line) > 2 && line[0] >= '0' && line[0] <= '9' && line[1] == '.') {
 			continue
 		}
 		// Return first 200 chars of first paragraph

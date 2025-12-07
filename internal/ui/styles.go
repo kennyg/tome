@@ -428,9 +428,6 @@ func DescriptionWidth() int {
 	if desc < 40 {
 		return 40
 	}
-	if desc > 200 {
-		return 200
-	}
 	return desc
 }
 
