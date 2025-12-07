@@ -100,15 +100,12 @@ func runLearn(cmd *cobra.Command, args []string) {
 }
 
 func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Paths) {
-	fmt.Println(ui.Info.Render("  Source: GitHub"))
-	fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s/%s", src.Owner, src.Repo)))
-	if src.Path != "" {
-		fmt.Println(ui.Muted.Render(fmt.Sprintf("    Path: %s", src.Path)))
-	}
-	fmt.Println()
-
 	// Check if path points to a specific file
 	if src.Path != "" && strings.HasSuffix(strings.ToLower(src.Path), ".md") {
+		fmt.Println(ui.Info.Render("  Source: GitHub"))
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s/%s", src.Owner, src.Repo)))
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    Path: %s", src.Path)))
+		fmt.Println()
 		// Single file
 		url := src.GitHubRawURL("")
 		learnSingleFile(client, url, filepath.Base(src.Path), src.String(), paths)
@@ -117,6 +114,33 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 
 	// Try to list directory contents
 	apiURL := src.GitHubAPIURL()
+
+	// Try to fetch manifest for collection info
+	manifest, _ := client.FetchManifest(apiURL)
+	if manifest != nil && manifest.Name != "" {
+		// Display collection info
+		fmt.Println(ui.Info.Render("  Collection: " + manifest.Name))
+		if manifest.Description != "" {
+			fmt.Println(ui.Muted.Render("    " + manifest.Description))
+		}
+		if manifest.Author != "" {
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("    by %s", manifest.Author)))
+		}
+		if manifest.Source != "" {
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s", manifest.Source)))
+		}
+		if len(manifest.Tags) > 0 {
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("    tags: %s", strings.Join(manifest.Tags, ", "))))
+		}
+	} else {
+		fmt.Println(ui.Info.Render("  Source: GitHub"))
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s/%s", src.Owner, src.Repo)))
+		if src.Path != "" {
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("    Path: %s", src.Path)))
+		}
+	}
+	fmt.Println()
+
 	fmt.Println(ui.Muted.Render("  Scanning for artifacts..."))
 
 	artifacts, err := client.FindArtifacts(apiURL)

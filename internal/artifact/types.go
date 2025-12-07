@@ -53,11 +53,21 @@ type Argument struct {
 
 // Manifest represents the tome.yaml file in a repository
 type Manifest struct {
-	Name        string     `yaml:"name"`
-	Description string     `yaml:"description,omitempty"`
-	Author      string     `yaml:"author,omitempty"`
-	Version     string     `yaml:"version,omitempty"`
-	Artifacts   []Artifact `yaml:"artifacts,omitempty"`
+	Name        string   `yaml:"name" json:"name"`
+	Description string   `yaml:"description,omitempty" json:"description,omitempty"`
+	Author      string   `yaml:"author,omitempty" json:"author,omitempty"`
+	Version     string   `yaml:"version,omitempty" json:"version,omitempty"`
+	License     string   `yaml:"license,omitempty" json:"license,omitempty"`
+	Source      string   `yaml:"source,omitempty" json:"source,omitempty"`
+	Homepage    string   `yaml:"homepage,omitempty" json:"homepage,omitempty"`
+	Tags        []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+
+	// Optional custom paths (defaults: commands/, skills/)
+	CommandsDir string `yaml:"commands_dir,omitempty" json:"commands_dir,omitempty"`
+	SkillsDir   string `yaml:"skills_dir,omitempty" json:"skills_dir,omitempty"`
+
+	// Populated during build/validation
+	Artifacts []Artifact `yaml:"-" json:"artifacts,omitempty"`
 }
 
 // InstalledArtifact tracks what's been installed

@@ -250,6 +250,44 @@ func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 	return artifacts, nil
 }
 
+// FetchManifest tries to fetch and parse a tome.yaml manifest from a GitHub repo
+func (c *Client) FetchManifest(apiURL string) (*artifact.Manifest, error) {
+	// Try to fetch tome.yaml
+	manifestURL := appendPath(apiURL, "tome.yaml")
+	contents, err := c.ListGitHubContents(apiURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// Look for tome.yaml in the listing
+	var downloadURL string
+	for _, item := range contents {
+		if item.Type == "file" && (item.Name == "tome.yaml" || item.Name == "tome.yml") {
+			downloadURL = item.DownloadURL
+			break
+		}
+	}
+
+	if downloadURL == "" {
+		return nil, nil // No manifest, not an error
+	}
+
+	// Fetch the manifest content
+	content, err := c.FetchURL(downloadURL)
+	if err != nil {
+		// Try using the API URL directly
+		_ = manifestURL // suppress unused warning
+		return nil, nil
+	}
+
+	var manifest artifact.Manifest
+	if err := yaml.Unmarshal(content, &manifest); err != nil {
+		return nil, fmt.Errorf("failed to parse tome.yaml: %w", err)
+	}
+
+	return &manifest, nil
+}
+
 // Frontmatter represents the YAML frontmatter in a skill file
 type Frontmatter struct {
 	Name        string   `yaml:"name"`
