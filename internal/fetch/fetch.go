@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -67,16 +68,17 @@ func (c *Client) FetchURL(url string) ([]byte, error) {
 }
 
 // fetchWithGH fetches file content using gh CLI
-func (c *Client) fetchWithGH(url string) ([]byte, error) {
+func (c *Client) fetchWithGH(rawURL string) ([]byte, error) {
 	// Parse the URL to get owner/repo/path
-	// raw.githubusercontent.com/owner/repo/ref/path
-	// or github.com/owner/repo/raw/ref/path
+	// Formats:
+	//   raw.githubusercontent.com/owner/repo/ref/path (public)
+	//   github.company.com/owner/repo/raw/ref/path (GHE)
 
-	var owner, repo, path string
+	var owner, repo, path, hostname string
 
-	if strings.Contains(url, "raw.githubusercontent.com") {
+	if strings.Contains(rawURL, "raw.githubusercontent.com") {
 		// https://raw.githubusercontent.com/owner/repo/ref/path/to/file
-		parts := strings.Split(strings.TrimPrefix(url, "https://raw.githubusercontent.com/"), "/")
+		parts := strings.Split(strings.TrimPrefix(rawURL, "https://raw.githubusercontent.com/"), "/")
 		if len(parts) < 4 {
 			return nil, fmt.Errorf("invalid raw URL")
 		}
@@ -84,13 +86,37 @@ func (c *Client) fetchWithGH(url string) ([]byte, error) {
 		repo = parts[1]
 		// parts[2] is the ref
 		path = strings.Join(parts[3:], "/")
+		hostname = "" // Public GitHub, no hostname needed
+	} else if strings.Contains(rawURL, "/raw/") {
+		// GHE: https://github.company.com/owner/repo/raw/ref/path/to/file
+		u, err := parseGHEURL(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		hostname = u.Host
+		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if len(parts) < 5 || parts[2] != "raw" {
+			return nil, fmt.Errorf("invalid GHE raw URL")
+		}
+		owner = parts[0]
+		repo = parts[1]
+		// parts[2] is "raw", parts[3] is ref
+		path = strings.Join(parts[4:], "/")
 	} else {
 		return nil, fmt.Errorf("unsupported GitHub URL format for gh fetch")
 	}
 
 	// Use gh api to get file content
 	apiPath := fmt.Sprintf("repos/%s/%s/contents/%s", owner, repo, path)
-	cmd := exec.Command(c.ghPath, "api", apiPath, "--jq", ".content")
+
+	var cmd *exec.Cmd
+	if hostname != "" {
+		// GHE: specify the hostname
+		cmd = exec.Command(c.ghPath, "api", "--hostname", hostname, apiPath, "--jq", ".content")
+	} else {
+		cmd = exec.Command(c.ghPath, "api", apiPath, "--jq", ".content")
+	}
+
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("gh api failed: %w", err)
@@ -108,6 +134,11 @@ func (c *Client) fetchWithGH(url string) ([]byte, error) {
 	}
 
 	return decoded, nil
+}
+
+// parseGHEURL parses a URL string
+func parseGHEURL(rawURL string) (*url.URL, error) {
+	return url.Parse(rawURL)
 }
 
 // base64Decode decodes base64 content (handles newlines in GitHub's response)
@@ -159,11 +190,26 @@ func (c *Client) ListGitHubContents(apiURL string) ([]GitHubContent, error) {
 
 // listWithGH uses gh CLI for authenticated GitHub API access
 func (c *Client) listWithGH(apiURL string) ([]GitHubContent, error) {
-	// Convert full URL to gh api path
-	// https://api.github.com/repos/owner/repo/contents -> repos/owner/repo/contents
-	path := strings.TrimPrefix(apiURL, "https://api.github.com/")
+	var cmd *exec.Cmd
 
-	cmd := exec.Command(c.ghPath, "api", path)
+	if strings.HasPrefix(apiURL, "https://api.github.com/") {
+		// Public GitHub: https://api.github.com/repos/owner/repo/contents -> repos/owner/repo/contents
+		path := strings.TrimPrefix(apiURL, "https://api.github.com/")
+		cmd = exec.Command(c.ghPath, "api", path)
+	} else {
+		// GHE: https://github.company.com/api/v3/repos/owner/repo/contents
+		u, err := url.Parse(apiURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid API URL: %w", err)
+		}
+		// Extract path after /api/v3/
+		path := strings.TrimPrefix(u.Path, "/api/v3/")
+		if u.RawQuery != "" {
+			path += "?" + u.RawQuery
+		}
+		cmd = exec.Command(c.ghPath, "api", "--hostname", u.Host, path)
+	}
+
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("gh api failed: %w", err)
@@ -293,16 +339,19 @@ func (c *Client) FetchManifest(apiURL string) (*artifact.Manifest, error) {
 
 // Frontmatter represents the YAML frontmatter in a skill file
 type Frontmatter struct {
-	Name        string   `yaml:"name"`
-	Description string   `yaml:"description"`
-	Version     string   `yaml:"version,omitempty"`
-	Author      string   `yaml:"author,omitempty"`
-	Globs       []string `yaml:"globs,omitempty"`
-	Includes    []string `yaml:"includes,omitempty"` // Additional files to install with this skill
+	Name         string   `yaml:"name"`
+	Description  string   `yaml:"description"`
+	Version      string   `yaml:"version,omitempty"`
+	Author       string   `yaml:"author,omitempty"`
+	License      string   `yaml:"license,omitempty"`
+	Globs        []string `yaml:"globs,omitempty"`
+	Includes     []string `yaml:"includes,omitempty"`      // Optional: limit which files to install
+	AllowedTools []string `yaml:"allowed-tools,omitempty"` // Pre-approved tools for Claude Code
 }
 
 // Allowed file extensions for skill includes (security whitelist)
 var allowedExtensions = map[string]bool{
+	// Safe text files
 	".md":   true,
 	".txt":  true,
 	".json": true,
@@ -310,6 +359,27 @@ var allowedExtensions = map[string]bool{
 	".yml":  true,
 	".toml": true,
 	".tmpl": true,
+	// Scripts (installed as non-executable 0644)
+	".py": true,
+	".sh": true,
+	".js": true,
+	".ts": true,
+	".rb": true,
+}
+
+// Script extensions that should be installed non-executable
+var scriptExtensions = map[string]bool{
+	".py": true,
+	".sh": true,
+	".js": true,
+	".ts": true,
+	".rb": true,
+}
+
+// IsScriptFile returns true if the file is a script
+func IsScriptFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return scriptExtensions[ext]
 }
 
 // ValidateIncludePath checks if an include path is safe
@@ -378,6 +448,85 @@ func (c *Client) FetchSkillIncludes(baseURL string, skillDir string, includes []
 	}
 
 	return files, nil
+}
+
+// DiscoverSkillFiles auto-discovers all files in a skill directory
+func (c *Client) DiscoverSkillFiles(apiURL string, skillDir string) ([]IncludedFile, error) {
+	var files []IncludedFile
+	var totalSize int64
+
+	// Recursively discover files
+	err := c.discoverFilesRecursive(apiURL, skillDir, "", &files, &totalSize)
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
+func (c *Client) discoverFilesRecursive(apiURL string, skillDir string, subPath string, files *[]IncludedFile, totalSize *int64) error {
+	// Build URL for this directory
+	dirURL := apiURL
+	if skillDir != "" {
+		dirURL = appendPath(dirURL, skillDir)
+	}
+	if subPath != "" {
+		dirURL = appendPath(dirURL, subPath)
+	}
+
+	contents, err := c.ListGitHubContents(dirURL)
+	if err != nil {
+		return err
+	}
+
+	for _, item := range contents {
+		relPath := item.Name
+		if subPath != "" {
+			relPath = subPath + "/" + item.Name
+		}
+
+		if item.Type == "dir" {
+			// Recurse into subdirectory
+			if err := c.discoverFilesRecursive(apiURL, skillDir, relPath, files, totalSize); err != nil {
+				// Skip directories we can't access
+				continue
+			}
+		} else if item.Type == "file" {
+			// Skip SKILL.md - it's handled separately as the main file
+			if strings.ToUpper(item.Name) == "SKILL.MD" {
+				continue
+			}
+
+			// Validate extension
+			if err := ValidateIncludePath(relPath); err != nil {
+				// Skip files with disallowed extensions
+				continue
+			}
+
+			// Fetch the file
+			content, err := c.FetchURL(item.DownloadURL)
+			if err != nil {
+				continue // Skip files we can't fetch
+			}
+
+			// Check file size
+			if len(content) > MaxIncludeFileSize {
+				continue // Skip oversized files
+			}
+
+			*totalSize += int64(len(content))
+			if *totalSize > MaxTotalIncludeSize {
+				return fmt.Errorf("total skill size exceeds max (%d bytes)", MaxTotalIncludeSize)
+			}
+
+			*files = append(*files, IncludedFile{
+				Path:    relPath,
+				Content: content,
+			})
+		}
+	}
+
+	return nil
 }
 
 // ParseSkill parses a SKILL.md file and returns an artifact

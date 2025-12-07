@@ -35,7 +35,7 @@ type Artifact struct {
 
 	// Skill-specific fields
 	Globs    []string `yaml:"globs,omitempty" json:"globs,omitempty"`
-	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"` // Additional files to install
+	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"` // Files installed with this skill
 
 	// Command-specific fields
 	Arguments []Argument `yaml:"arguments,omitempty" json:"arguments,omitempty"`

@@ -200,14 +200,33 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 			continue
 		}
 
-		// Fetch includes for skills
+		// Auto-discover all files in the skill directory
 		var includes []fetch.IncludedFile
-		if art.Type == artifact.TypeSkill && len(art.Includes) > 0 {
-			apiURL := src.GitHubAPIURL()
-			includes, err = client.FetchSkillIncludes(apiURL, item.SkillDir, art.Includes)
-			if err != nil {
-				fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipping %s: %v", item.Name, err)))
-				continue
+		if art.Type == artifact.TypeSkill {
+			// Determine the skill directory
+			skillDir := item.SkillDir
+			if skillDir == "" && src.Path != "" {
+				// If user specified a path directly (e.g., skills/skill-creator),
+				// use that path as the skill directory
+				skillDir = src.Path
+			}
+			if skillDir != "" {
+				// Use base API URL (repo root) for discovery
+				var baseAPIURL string
+				if src.Host == "github.com" || src.Host == "" {
+					baseAPIURL = fmt.Sprintf("https://api.github.com/repos/%s/%s/contents", src.Owner, src.Repo)
+				} else {
+					// GitHub Enterprise
+					baseAPIURL = fmt.Sprintf("https://%s/api/v3/repos/%s/%s/contents", src.Host, src.Owner, src.Repo)
+				}
+				if src.Ref != "" {
+					baseAPIURL += "?ref=" + src.Ref
+				}
+				includes, err = client.DiscoverSkillFiles(baseAPIURL, skillDir)
+				if err != nil {
+					fmt.Println(ui.Warning.Render(fmt.Sprintf("  Warning: couldn't fetch skill files for %s: %v", item.Name, err)))
+					// Continue anyway - the SKILL.md itself is still valuable
+				}
 			}
 		}
 
