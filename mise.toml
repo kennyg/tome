@@ -28,3 +28,36 @@ run = "go fmt ./..."
 [tasks.install]
 description = "Install tome to GOBIN"
 run = "go install ."
+
+[tasks.release]
+description = "Create a new release (usage: mise run release 0.1.0)"
+run = """
+#!/usr/bin/env bash
+set -e
+
+VERSION="${1:-}"
+if [ -z "$VERSION" ]; then
+  echo "Usage: mise run release <version>"
+  echo "Example: mise run release 0.1.0"
+  exit 1
+fi
+
+# Ensure version doesn't start with 'v'
+VERSION="${VERSION#v}"
+
+echo "Creating release v$VERSION..."
+
+# Check for uncommitted changes
+if ! git diff-index --quiet HEAD --; then
+  echo "Error: uncommitted changes. Please commit first."
+  exit 1
+fi
+
+# Create and push tag
+git tag -a "v$VERSION" -m "Release v$VERSION"
+git push origin "v$VERSION"
+
+echo ""
+echo "Release v$VERSION triggered!"
+echo "Watch progress: https://github.com/kennyg/tome/actions"
+"""
