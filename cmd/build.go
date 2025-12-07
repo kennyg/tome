@@ -33,11 +33,13 @@ Examples:
 }
 
 var (
-	buildJSON bool
+	buildJSON  bool
+	buildWrite bool
 )
 
 func init() {
 	buildCmd.Flags().BoolVar(&buildJSON, "json", false, "Output as JSON")
+	buildCmd.Flags().BoolVarP(&buildWrite, "write", "w", false, "Update tome.yaml with discovered artifacts")
 }
 
 func runBuild(cmd *cobra.Command, args []string) {
@@ -156,7 +158,32 @@ func runBuild(cmd *cobra.Command, args []string) {
 		seen[art.Name] = true
 	}
 
-	manifest.Artifacts = artifacts
+	// Convert to summaries for manifest
+	var summaries []artifact.ArtifactSummary
+	for _, art := range artifacts {
+		summaries = append(summaries, artifact.ArtifactSummary{
+			Name:        art.Name,
+			Type:        art.Type,
+			Description: art.Description,
+		})
+	}
+	manifest.Artifacts = summaries
+
+	// Write manifest if requested
+	if buildWrite && len(errors) == 0 {
+		output, err := yaml.Marshal(&manifest)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("failed to marshal manifest: %v", err))
+		} else {
+			header := "# Tome Collection Manifest\n# https://github.com/kennyg/tome\n\n"
+			if err := os.WriteFile("tome.yaml", []byte(header+string(output)), 0644); err != nil {
+				errors = append(errors, fmt.Sprintf("failed to write tome.yaml: %v", err))
+			} else if !buildJSON {
+				fmt.Println(ui.Muted.Render("  Updated tome.yaml with artifact index"))
+				fmt.Println()
+			}
+		}
+	}
 
 	// Output
 	if buildJSON {

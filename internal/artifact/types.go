@@ -51,6 +51,13 @@ type Argument struct {
 	Required    bool   `yaml:"required,omitempty" json:"required,omitempty"`
 }
 
+// ArtifactSummary is a minimal artifact representation for manifests
+type ArtifactSummary struct {
+	Name        string `yaml:"name" json:"name"`
+	Type        Type   `yaml:"type" json:"type"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+}
+
 // Manifest represents the tome.yaml file in a repository
 type Manifest struct {
 	Name        string   `yaml:"name" json:"name"`
@@ -66,8 +73,8 @@ type Manifest struct {
 	CommandsDir string `yaml:"commands_dir,omitempty" json:"commands_dir,omitempty"`
 	SkillsDir   string `yaml:"skills_dir,omitempty" json:"skills_dir,omitempty"`
 
-	// Populated during build/validation
-	Artifacts []Artifact `yaml:"-" json:"artifacts,omitempty"`
+	// Artifact index (written by 'tome bind --write')
+	Artifacts []ArtifactSummary `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
 }
 
 // InstalledArtifact tracks what's been installed
