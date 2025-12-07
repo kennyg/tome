@@ -177,6 +177,7 @@ func GetLocalPaths(agent Agent) (*Paths, error) {
 	}
 
 	// Project-local paths
+	projectConfigDir := filepath.Join(projectRoot, ".config", ConfigDir)
 	agentDir := filepath.Join(projectRoot, cfg.ConfigDir)
 	skillsDir := filepath.Join(agentDir, cfg.SkillsDir)
 	commandsDir := filepath.Join(agentDir, cfg.CommandsDir)
@@ -184,8 +185,8 @@ func GetLocalPaths(agent Agent) (*Paths, error) {
 	return &Paths{
 		Home:             home,
 		UserConfigDir:    userConfigDir,
-		StateFile:        filepath.Join(userConfigDir, StateFile),
-		ProjectConfigDir: filepath.Join(projectRoot, ".config", ConfigDir),
+		StateFile:        filepath.Join(projectConfigDir, StateFile), // Project-local state
+		ProjectConfigDir: projectConfigDir,
 		Agent:            agent,
 		AgentDir:         agentDir,
 		SkillsDir:        skillsDir,
