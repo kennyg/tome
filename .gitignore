@@ -27,3 +27,4 @@ dist/
 # Local development
 .env
 .env.local
+.claude/settings.local.json

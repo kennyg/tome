@@ -1,0 +1,28 @@
+amends "package://github.com/steveyegge/hk/hk@0.1.4#/Hook.pkl"
+
+preCommit {
+    builtin {
+        ["no-large-files"] {
+            args { "--maxkb"; "500" }
+        }
+    }
+    commands {
+        ["go-fmt"] {
+            run = "go fmt ./..."
+        }
+        ["go-vet"] {
+            run = "go vet ./..."
+        }
+    }
+}
+
+prePush {
+    commands {
+        ["go-test"] {
+            run = "go test ./..."
+        }
+        ["go-build"] {
+            run = "go build ."
+        }
+    }
+}
