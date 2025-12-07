@@ -11,18 +11,34 @@ type Agent string
 const (
 	AgentClaude   Agent = "claude"
 	AgentOpenCode Agent = "opencode"
-	AgentCrush    Agent = "crush"
+	AgentCopilot  Agent = "copilot"
 	AgentCursor   Agent = "cursor"
 	AgentWindsurf Agent = "windsurf"
+	AgentGemini   Agent = "gemini"
+	AgentAmp      Agent = "amp"
 )
+
+// AgentCapabilities tracks what features an agent supports
+type AgentCapabilities struct {
+	Skills   bool // SKILL.md files
+	Commands bool // Slash commands (.md files)
+	Hooks    bool // Event hooks (hooks.json)
+	Agents   bool // Agent definitions
+	Plugins  bool // Full plugin format (.claude-plugin/)
+	MCP      bool // Model Context Protocol
+}
 
 // AgentConfig holds the configuration for a specific agent
 type AgentConfig struct {
-	Name        Agent
-	DisplayName string
-	ConfigDir   string // Relative to home, e.g., ".claude"
-	SkillsDir   string // Relative to ConfigDir
-	CommandsDir string // Relative to ConfigDir
+	Name         Agent
+	DisplayName  string
+	ConfigDir    string // Relative to home, e.g., ".claude"
+	SkillsDir    string // Relative to ConfigDir
+	CommandsDir  string // Relative to ConfigDir
+	HooksDir     string // Relative to ConfigDir (if supported)
+	AgentsDir    string // Relative to ConfigDir (if supported)
+	PluginsDir   string // Relative to ConfigDir (if supported)
+	Capabilities AgentCapabilities
 }
 
 // KnownAgents returns all known agent configurations
@@ -34,6 +50,17 @@ func KnownAgents() []AgentConfig {
 			ConfigDir:   ".claude",
 			SkillsDir:   "skills",
 			CommandsDir: "commands",
+			HooksDir:    "hooks",
+			AgentsDir:   "agents",
+			PluginsDir:  "plugins",
+			Capabilities: AgentCapabilities{
+				Skills:   true,
+				Commands: true,
+				Hooks:    true,
+				Agents:   true,
+				Plugins:  true,
+				MCP:      true,
+			},
 		},
 		{
 			Name:        AgentOpenCode,
@@ -41,20 +68,44 @@ func KnownAgents() []AgentConfig {
 			ConfigDir:   ".opencode",
 			SkillsDir:   "skills",
 			CommandsDir: "commands",
+			Capabilities: AgentCapabilities{
+				Skills:   true,
+				Commands: true,
+				Hooks:    false, // Not yet supported
+				Agents:   false,
+				Plugins:  false,
+				MCP:      true,
+			},
 		},
 		{
-			Name:        AgentCrush,
-			DisplayName: "Crush",
-			ConfigDir:   ".crush",
-			SkillsDir:   "skills",
-			CommandsDir: "commands",
+			Name:        AgentCopilot,
+			DisplayName: "GitHub Copilot",
+			ConfigDir:   ".github",
+			SkillsDir:   "", // Uses copilot-instructions.md instead
+			CommandsDir: "",
+			Capabilities: AgentCapabilities{
+				Skills:   false, // Uses different format
+				Commands: false,
+				Hooks:    false,
+				Agents:   false,
+				Plugins:  false,
+				MCP:      false,
+			},
 		},
 		{
 			Name:        AgentCursor,
 			DisplayName: "Cursor",
 			ConfigDir:   ".cursor",
-			SkillsDir:   "skills",
-			CommandsDir: "commands",
+			SkillsDir:   "", // Uses .cursorrules instead
+			CommandsDir: "",
+			Capabilities: AgentCapabilities{
+				Skills:   false, // Uses different format
+				Commands: false,
+				Hooks:    false,
+				Agents:   false,
+				Plugins:  false,
+				MCP:      true,
+			},
 		},
 		{
 			Name:        AgentWindsurf,
@@ -62,6 +113,44 @@ func KnownAgents() []AgentConfig {
 			ConfigDir:   ".windsurf",
 			SkillsDir:   "skills",
 			CommandsDir: "commands",
+			Capabilities: AgentCapabilities{
+				Skills:   true,
+				Commands: true,
+				Hooks:    false,
+				Agents:   false,
+				Plugins:  false,
+				MCP:      true,
+			},
+		},
+		{
+			Name:        AgentGemini,
+			DisplayName: "Gemini CLI",
+			ConfigDir:   ".gemini",
+			SkillsDir:   "",
+			CommandsDir: "",
+			Capabilities: AgentCapabilities{
+				Skills:   false, // TODO: Research
+				Commands: false,
+				Hooks:    false,
+				Agents:   false,
+				Plugins:  false,
+				MCP:      false,
+			},
+		},
+		{
+			Name:        AgentAmp,
+			DisplayName: "Amp",
+			ConfigDir:   ".amp",
+			SkillsDir:   "",
+			CommandsDir: "",
+			Capabilities: AgentCapabilities{
+				Skills:   false, // TODO: Research
+				Commands: false,
+				Hooks:    false,
+				Agents:   false,
+				Plugins:  false,
+				MCP:      false,
+			},
 		},
 	}
 }

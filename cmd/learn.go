@@ -138,6 +138,12 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 	// Try to list directory contents
 	apiURL := src.GitHubAPIURL()
 
+	// Check if this is a plugin
+	if client.IsPlugin(apiURL) {
+		learnPlugin(client, src, apiURL, paths)
+		return
+	}
+
 	// Try to fetch manifest for collection info
 	manifest, _ := client.FetchManifest(apiURL)
 	if manifest != nil && manifest.Name != "" {
@@ -500,7 +506,103 @@ func getInstallPath(art *artifact.Artifact, paths *config.Paths) string {
 		// Commands are just .md files
 		safeName := fetch.SanitizeFilename(art.Name) + ".md"
 		return filepath.Join(paths.CommandsDir, safeName)
+	case artifact.TypeAgent:
+		// Agents are .md files in agents/
+		agentCfg := config.GetAgentConfig(paths.Agent)
+		if agentCfg != nil && agentCfg.AgentsDir != "" {
+			agentsDir := filepath.Join(paths.AgentDir, agentCfg.AgentsDir)
+			safeName := fetch.SanitizeFilename(art.Name) + ".md"
+			return filepath.Join(agentsDir, safeName)
+		}
+		// Fallback to commands if agents not supported
+		safeName := fetch.SanitizeFilename(art.Name) + ".md"
+		return filepath.Join(paths.CommandsDir, safeName)
 	default:
 		return filepath.Join(paths.CommandsDir, art.Filename)
 	}
+}
+
+// learnPlugin handles installing a plugin and all its artifacts
+func learnPlugin(client *fetch.Client, src *source.Source, apiURL string, paths *config.Paths) {
+	fmt.Println(ui.PluginBadge + "  " + ui.Info.Render("Plugin detected"))
+	fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s/%s", src.Owner, src.Repo)))
+	fmt.Println()
+
+	// Fetch the complete plugin
+	plugin, err := client.FetchPlugin(apiURL, src.String())
+	if err != nil {
+		exitWithError(fmt.Sprintf("failed to fetch plugin: %v", err))
+	}
+
+	// Display plugin info
+	fmt.Println(ui.Highlight.Render("  " + plugin.Manifest.Name))
+	if plugin.Manifest.Description != "" {
+		fmt.Println(ui.Muted.Render("    " + plugin.Manifest.Description))
+	}
+	if plugin.Manifest.Author.Name != "" {
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    by %s", plugin.Manifest.Author.Name)))
+	}
+	if plugin.Manifest.Version != "" {
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    v%s", plugin.Manifest.Version)))
+	}
+	fmt.Println()
+
+	// Count artifacts
+	totalArtifacts := len(plugin.Skills) + len(plugin.Commands) + len(plugin.Agents) + len(plugin.Hooks)
+	if totalArtifacts == 0 {
+		fmt.Println(ui.Warning.Render("  No artifacts found in plugin"))
+		return
+	}
+
+	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Found %d artifact(s):", totalArtifacts)))
+	if len(plugin.Skills) > 0 {
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    • %d skill(s)", len(plugin.Skills))))
+	}
+	if len(plugin.Commands) > 0 {
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    • %d command(s)", len(plugin.Commands))))
+	}
+	if len(plugin.Agents) > 0 {
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    • %d agent(s)", len(plugin.Agents))))
+	}
+	if len(plugin.Hooks) > 0 {
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    • %d hook(s)", len(plugin.Hooks))))
+	}
+	fmt.Println()
+
+	// Install all artifacts
+	var installed []string
+
+	for _, skill := range plugin.Skills {
+		skill.Source = src.String()
+		installArtifactQuiet(&skill, paths)
+		installed = append(installed, skill.Name)
+	}
+
+	for _, cmd := range plugin.Commands {
+		cmd.Source = src.String()
+		installArtifactQuiet(&cmd, paths)
+		installed = append(installed, cmd.Name)
+	}
+
+	for _, agent := range plugin.Agents {
+		agent.Source = src.String()
+		installArtifactQuiet(&agent, paths)
+		installed = append(installed, agent.Name)
+	}
+
+	// Note: Hooks require special handling - they go into settings.json, not separate files
+	// For now, we'll skip hooks or show a warning
+	if len(plugin.Hooks) > 0 {
+		fmt.Println(ui.Warning.Render("  Note: Hooks require manual configuration in settings.json"))
+	}
+
+	// Summary
+	fmt.Println()
+	fmt.Println(ui.SuccessLine(fmt.Sprintf("Inscribed %d artifact(s) from plugin", len(installed))))
+	for _, name := range installed {
+		fmt.Println(ui.Muted.Render("    • " + name))
+	}
+	fmt.Println()
+	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
+	fmt.Println(ui.PageFooter())
 }

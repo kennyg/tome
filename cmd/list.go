@@ -206,6 +206,10 @@ func getBadge(t artifact.Type) string {
 		return ui.PromptBadge
 	case artifact.TypeHook:
 		return ui.HookBadge
+	case artifact.TypeAgent:
+		return ui.AgentBadge
+	case artifact.TypePlugin:
+		return ui.PluginBadge
 	default:
 		return ""
 	}

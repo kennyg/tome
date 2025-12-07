@@ -10,6 +10,8 @@ const (
 	TypeCommand Type = "command"
 	TypePrompt  Type = "prompt"
 	TypeHook    Type = "hook"
+	TypeAgent   Type = "agent"
+	TypePlugin  Type = "plugin"
 )
 
 // Artifact represents an installable item (skill, command, prompt, or hook)
@@ -82,6 +84,40 @@ type Manifest struct {
 // InstalledArtifact tracks what's been installed
 type InstalledArtifact struct {
 	Artifact
-	LocalPath string    `json:"local_path"`
-	Hash      string    `json:"hash,omitempty"` // For update detection
+	LocalPath string `json:"local_path"`
+	Hash      string `json:"hash,omitempty"` // For update detection
+}
+
+// PluginManifest represents .claude-plugin/plugin.json
+type PluginManifest struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Version     string       `json:"version,omitempty"`
+	Author      PluginAuthor `json:"author,omitempty"`
+	Repository  *PluginRepo  `json:"repository,omitempty"`
+}
+
+// PluginAuthor represents plugin author info
+type PluginAuthor struct {
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+	URL   string `json:"url,omitempty"`
+}
+
+// PluginRepo represents plugin repository info
+type PluginRepo struct {
+	Type string `json:"type,omitempty"`
+	URL  string `json:"url,omitempty"`
+}
+
+// Plugin represents a complete plugin with all its artifacts
+type Plugin struct {
+	Manifest PluginManifest
+	Source   string // Where it was fetched from
+
+	// Extracted artifacts
+	Skills   []Artifact
+	Commands []Artifact
+	Agents   []Artifact
+	Hooks    []Artifact
 }

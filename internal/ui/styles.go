@@ -150,6 +150,8 @@ var (
 	CmdBadge    = baseBadge.Background(Blue).Foreground(White).Render("⌘ CMD")
 	PromptBadge = baseBadge.Background(Emerald).Foreground(White).Render("✎ PROMPT")
 	HookBadge   = baseBadge.Background(Copper).Foreground(White).Render("⚡ HOOK")
+	AgentBadge  = baseBadge.Background(Magenta).Foreground(White).Render("◈ AGENT")
+	PluginBadge = baseBadge.Background(Gold).Foreground(Black).Render("⬡ PLUGIN")
 
 	// Status badges
 	StatusOK     = baseBadge.Background(Green).Foreground(White).Render("✓")
