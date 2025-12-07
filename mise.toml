@@ -59,4 +59,71 @@ git push origin "v$VERSION"
 echo ""
 echo "Release v$VERSION triggered!"
 echo "Watch progress: https://github.com/kennyg/tome/actions"
+echo ""
+echo "After CI completes, run: mise run homebrew $VERSION"
+"""
+
+[tasks.homebrew]
+description = "Update homebrew formula (usage: mise run homebrew 0.5.2)"
+run = """
+#!/usr/bin/env bash
+set -e
+
+VERSION="${1:-}"
+if [ -z "$VERSION" ]; then
+  echo "Usage: mise run homebrew <version>"
+  echo "Example: mise run homebrew 0.5.2"
+  exit 1
+fi
+
+VERSION="${VERSION#v}"
+echo "Updating homebrew formula to v$VERSION..."
+
+# Get SHA256 of source tarball
+echo "Fetching SHA256..."
+SHA256=$(curl -sL "https://github.com/kennyg/tome/archive/refs/tags/v$VERSION.tar.gz" | shasum -a 256 | cut -d' ' -f1)
+echo "SHA256: $SHA256"
+
+# Create formula
+FORMULA=$(cat <<EOF
+class Tome < Formula
+  desc "AI Agent Skill Manager - Your spellbook for AI agent capabilities"
+  homepage "https://github.com/kennyg/tome"
+  url "https://github.com/kennyg/tome/archive/refs/tags/v$VERSION.tar.gz"
+  sha256 "$SHA256"
+  license "MIT"
+  head "https://github.com/kennyg/tome.git", branch: "main"
+
+  depends_on "go" => :build
+
+  def install
+    ldflags = %W[
+      -s -w
+      -X github.com/kennyg/tome/cmd.Version=#{version}
+    ]
+    system "go", "build", *std_go_args(ldflags:)
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/tome edition")
+  end
+end
+EOF
+)
+
+# Get current file SHA
+FILE_SHA=$(gh api repos/kennyg/homebrew-tap/contents/Formula/tome.rb --jq '.sha')
+
+# Update formula via GitHub API
+CONTENT=$(echo "$FORMULA" | base64 | tr -d '\n')
+gh api repos/kennyg/homebrew-tap/contents/Formula/tome.rb \
+  -X PUT \
+  -f message="Update tome to v$VERSION" \
+  -f content="$CONTENT" \
+  -f sha="$FILE_SHA" \
+  --jq '.commit.html_url'
+
+echo ""
+echo "Homebrew formula updated to v$VERSION"
+echo "Users can now run: brew update && brew upgrade tome"
 """
