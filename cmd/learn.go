@@ -590,10 +590,26 @@ func learnPlugin(client *fetch.Client, src *source.Source, apiURL string, paths 
 		installed = append(installed, agent.Name)
 	}
 
-	// Note: Hooks require special handling - they go into settings.json, not separate files
-	// For now, we'll skip hooks or show a warning
+	// Install hooks to hooks directory
 	if len(plugin.Hooks) > 0 {
-		fmt.Println(ui.Warning.Render("  Note: Hooks require manual configuration in settings.json"))
+		agentCfg := config.GetAgentConfig(paths.Agent)
+		if agentCfg != nil && agentCfg.HooksDir != "" {
+			hooksDir := filepath.Join(paths.AgentDir, agentCfg.HooksDir)
+			if err := os.MkdirAll(hooksDir, 0755); err == nil {
+				for _, hook := range plugin.Hooks {
+					hookPath := filepath.Join(hooksDir, hook.Filename)
+					if err := os.WriteFile(hookPath, []byte(hook.Content), 0755); err == nil {
+						fmt.Printf("  %s %s\n", ui.HookBadge, ui.Highlight.Render(hook.Name))
+						installed = append(installed, hook.Name)
+					}
+				}
+				fmt.Println()
+				fmt.Println(ui.Warning.Render("  Note: Add hooks to settings.json to enable them"))
+				fmt.Println(ui.Muted.Render(fmt.Sprintf("    Installed to: %s", hooksDir)))
+			}
+		} else {
+			fmt.Println(ui.Warning.Render("  Note: Hooks not supported for this agent"))
+		}
 	}
 
 	// Summary

@@ -230,24 +230,69 @@ func (c *Client) fetchPluginHooks(apiURL string) ([]artifact.Artifact, error) {
 	}
 
 	for _, item := range contents {
-		// Look for hooks.json or individual hook files
-		if item.Type == "file" && item.Name == "hooks.json" {
+		if item.Type != "file" {
+			continue
+		}
+
+		// Skip README files
+		if strings.ToLower(item.Name) == "readme.md" {
+			continue
+		}
+
+		// Look for hooks.json
+		if item.Name == "hooks.json" {
 			content, err := c.FetchURL(item.DownloadURL)
 			if err != nil {
 				continue
 			}
 
-			// Parse hooks.json - it contains an array of hook definitions
 			parsedHooks, err := ParseHooksJSON(content, item.DownloadURL)
 			if err != nil {
 				continue
 			}
 
 			hooks = append(hooks, parsedHooks...)
+			continue
+		}
+
+		// Look for shell scripts (e.g., pre-compact.sh, post-tool-use.sh)
+		if strings.HasSuffix(item.Name, ".sh") {
+			content, err := c.FetchURL(item.DownloadURL)
+			if err != nil {
+				continue
+			}
+
+			// Extract hook event from filename (e.g., pre-compact.sh -> PreCompact)
+			event := hookEventFromFilename(item.Name)
+
+			hooks = append(hooks, artifact.Artifact{
+				Name:        strings.TrimSuffix(item.Name, ".sh"),
+				Type:        artifact.TypeHook,
+				Description: fmt.Sprintf("Hook script for %s event", event),
+				Event:       event,
+				SourceURL:   item.DownloadURL,
+				Content:     string(content),
+				Filename:    item.Name,
+			})
 		}
 	}
 
 	return hooks, nil
+}
+
+// hookEventFromFilename converts a hook filename to an event name
+// e.g., "pre-compact.sh" -> "PreCompact", "post-tool-use.sh" -> "PostToolUse"
+func hookEventFromFilename(filename string) string {
+	name := strings.TrimSuffix(filename, ".sh")
+	parts := strings.Split(name, "-")
+
+	var result string
+	for _, part := range parts {
+		if len(part) > 0 {
+			result += strings.ToUpper(part[:1]) + part[1:]
+		}
+	}
+	return result
 }
 
 // ParseAgent parses an agent markdown file
