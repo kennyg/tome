@@ -58,7 +58,6 @@ tome/
 ```bash
 # Build
 mise run build              # Build to bin/tome
-go build -o bin/tome .      # Or directly
 
 # Run
 ./bin/tome --help           # See all commands
@@ -66,12 +65,29 @@ mise run dev learn foo/bar  # Run in dev mode
 
 # Test
 mise run test               # Run all tests
-go test ./...               # Or directly
 
 # Format/Lint
 mise run fmt                # Format code
 mise run lint               # Run linter (requires golangci-lint)
+
+# Install locally
+mise run install            # Install to GOBIN
 ```
+
+## Releasing
+
+**Always use mise for releases:**
+
+```bash
+mise run release <version>  # e.g., mise run release 0.2.0
+```
+
+This will:
+1. Create and push the git tag
+2. Trigger the GitHub Actions release workflow
+3. Build binaries for all platforms via GoReleaser
+
+**Do NOT manually tag releases** - always use `mise run release`.
 
 ## Issue Tracking with bd (beads)
 
