@@ -56,6 +56,7 @@ type ArtifactSummary struct {
 	Name        string `yaml:"name" json:"name"`
 	Type        Type   `yaml:"type" json:"type"`
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Hash        string `yaml:"hash,omitempty" json:"hash,omitempty"` // sha256:... for integrity verification
 }
 
 // Manifest represents the tome.yaml file in a repository

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -161,10 +163,17 @@ func runBuild(cmd *cobra.Command, args []string) {
 	// Convert to summaries for manifest
 	var summaries []artifact.ArtifactSummary
 	for _, art := range artifacts {
+		// Calculate SHA256 hash of content
+		hash := ""
+		if art.Content != "" {
+			h := sha256.Sum256([]byte(art.Content))
+			hash = "sha256:" + hex.EncodeToString(h[:])
+		}
 		summaries = append(summaries, artifact.ArtifactSummary{
 			Name:        art.Name,
 			Type:        art.Type,
 			Description: art.Description,
+			Hash:        hash,
 		})
 	}
 	manifest.Artifacts = summaries
