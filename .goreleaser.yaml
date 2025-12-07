@@ -29,11 +29,7 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
-      - goos: windows
-        format: zip
     files:
       - LICENSE*
       - README*
@@ -63,6 +59,8 @@ release:
 
 brews:
   - name: tome
+    ids:
+      - default
     repository:
       owner: kennyg
       name: homebrew-tap

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/kennyg/tome/internal/artifact"
@@ -68,17 +69,13 @@ func runList(cmd *cobra.Command, args []string) {
 	}
 
 	if len(filtered) == 0 {
-		fmt.Println()
-		fmt.Println(ui.Muted.Render("  Your tome is empty."))
-		fmt.Println()
-		fmt.Println(ui.Info.Render("  Use 'tome learn <source>' to inscribe your first artifact."))
-		fmt.Println()
+		fmt.Print(ui.EmptyTome())
 		return
 	}
 
+	// Header
 	fmt.Println()
-	fmt.Println(ui.PageHeader("Your Tome"))
-	fmt.Println(ui.Divider(50))
+	fmt.Println(ui.SectionHeader("Your Tome", 56))
 	fmt.Println()
 
 	// Group by type
@@ -87,7 +84,7 @@ func runList(cmd *cobra.Command, args []string) {
 		byType[a.Type] = append(byType[a.Type], a)
 	}
 
-	// Display each type
+	// Display each type in a beautiful card layout
 	for _, t := range []artifact.Type{artifact.TypeSkill, artifact.TypeCommand, artifact.TypePrompt, artifact.TypeHook} {
 		artifacts := byType[t]
 		if len(artifacts) == 0 {
@@ -95,15 +92,25 @@ func runList(cmd *cobra.Command, args []string) {
 		}
 
 		badge := getBadge(t)
-		fmt.Println(ui.Subtitle.Render(fmt.Sprintf("%s %ss (%d)", badge, t, len(artifacts))))
+		count := lipgloss.NewStyle().Foreground(ui.DarkGray).Render(fmt.Sprintf("(%d)", len(artifacts)))
+		fmt.Printf("  %s %s\n", badge, count)
+		fmt.Println()
 
 		for _, a := range artifacts {
-			fmt.Printf("  %s %s\n",
-				ui.Highlight.Render(a.Name),
-				ui.Muted.Render("- "+a.Description))
+			name := lipgloss.NewStyle().Foreground(ui.White).Bold(true).Render(a.Name)
+			desc := ui.Truncate(a.Description, 50)
+			descStyled := lipgloss.NewStyle().Foreground(ui.Gray).Render(desc)
+			fmt.Printf("    %s\n", name)
+			fmt.Printf("    %s\n", descStyled)
+			fmt.Println()
 		}
-		fmt.Println()
 	}
+
+	// Footer
+	total := len(filtered)
+	footer := lipgloss.NewStyle().Foreground(ui.DarkGray).Render(fmt.Sprintf("  %d artifact(s) inscribed", total))
+	fmt.Println(footer)
+	fmt.Println(ui.PageFooter())
 }
 
 func getBadge(t artifact.Type) string {

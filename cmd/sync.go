@@ -44,14 +44,12 @@ func runSync(cmd *cobra.Command, args []string) {
 	}
 
 	if len(state.Installed) == 0 {
-		fmt.Println()
-		fmt.Println(ui.Muted.Render("  No artifacts installed. Nothing to sync."))
-		fmt.Println()
+		fmt.Print(ui.EmptyTome())
 		return
 	}
 
 	fmt.Println()
-	fmt.Println(ui.Title.Render("  Syncing your tome..."))
+	fmt.Println(ui.SectionHeader("Renewing Inscriptions", 56))
 	fmt.Println()
 
 	client := fetch.NewClient()
@@ -141,29 +139,26 @@ func runSync(cmd *cobra.Command, args []string) {
 	// Save state if we made changes
 	if updated > 0 && !syncDry {
 		if err := config.SaveState(paths.StateFile, state); err != nil {
-			fmt.Println()
-			fmt.Println(ui.Warning.Render(fmt.Sprintf("  Warning: failed to save state: %v", err)))
+			fmt.Println(ui.WarningLine(fmt.Sprintf("Failed to save state: %v", err)))
 		}
 	}
 
 	// Summary
 	fmt.Println()
-	fmt.Println(ui.Divider(50))
-	fmt.Println()
 
 	if syncDry {
-		fmt.Println(ui.Info.Render("  Dry run complete."))
+		fmt.Println(ui.InfoLine("Dry run complete - no changes made"))
 	} else if updated > 0 {
-		fmt.Println(ui.Success.Render(fmt.Sprintf("  Updated %d artifact(s).", updated)))
+		fmt.Println(ui.SuccessLine(fmt.Sprintf("Renewed %d artifact(s)", updated)))
 	} else {
-		fmt.Println(ui.Success.Render("  All artifacts are up to date."))
+		fmt.Println(ui.SuccessLine("All inscriptions are current"))
 	}
 
 	if failed > 0 {
-		fmt.Println(ui.Warning.Render(fmt.Sprintf("  %d artifact(s) failed to sync.", failed)))
+		fmt.Println(ui.WarningLine(fmt.Sprintf("%d artifact(s) could not be renewed", failed)))
 	}
 
-	fmt.Println()
+	fmt.Println(ui.PageFooter())
 }
 
 func hashContent(content []byte) string {

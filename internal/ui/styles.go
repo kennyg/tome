@@ -1,44 +1,65 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Color palette - ancient tome/parchment theme
+// ═══════════════════════════════════════════════════════════════════════════════
+// COLOR PALETTE - Ancient tome meets modern terminal
+// ═══════════════════════════════════════════════════════════════════════════════
+
 var (
-	// Primary colors - aged parchment and ink
-	Gold      = lipgloss.Color("#D4A574") // Aged gold/bronze
-	Amber     = lipgloss.Color("#E8B866") // Warm amber
-	Sepia     = lipgloss.Color("#A67B5B") // Sepia brown
-	Ink       = lipgloss.Color("#2C1810") // Dark ink
-	Parchment = lipgloss.Color("#F5E6D3") // Light parchment
+	// Gradient colors for the logo and accents
+	Gradient1 = lipgloss.Color("#FF6B6B") // Warm coral
+	Gradient2 = lipgloss.Color("#C44569") // Deep rose
+	Gradient3 = lipgloss.Color("#6C5CE7") // Royal purple
+	Gradient4 = lipgloss.Color("#A29BFE") // Soft lavender
+
+	// Primary palette - rich and warm
+	Gold       = lipgloss.Color("#F4D03F") // Bright gold
+	Amber      = lipgloss.Color("#E59866") // Warm amber
+	Bronze     = lipgloss.Color("#CD6155") // Deep bronze
+	Copper     = lipgloss.Color("#DC7633") // Copper accent
+	Parchment  = lipgloss.Color("#FAE5D3") // Light parchment
+	Sepia      = lipgloss.Color("#A67B5B") // Sepia tone
+	DarkBrown  = lipgloss.Color("#5D4037") // Dark leather
 
 	// Accent colors - magical elements
-	Purple    = lipgloss.Color("#8B5CF6") // Mystical purple
-	Pink      = lipgloss.Color("#EC4899") // Enchanted pink
-	Blue      = lipgloss.Color("#60A5FA") // Arcane blue
-	Green     = lipgloss.Color("#34D399") // Nature/success
-	Yellow    = lipgloss.Color("#FBBF24") // Highlight gold
-	Orange    = lipgloss.Color("#F97316") // Warning flame
-	Gray      = lipgloss.Color("#9CA3AF")
-	DarkGray  = lipgloss.Color("#6B7280")
-	LightGray = lipgloss.Color("#D1D5DB")
+	Purple     = lipgloss.Color("#9B59B6") // Mystical purple
+	Violet     = lipgloss.Color("#8E44AD") // Deep violet
+	Blue       = lipgloss.Color("#5DADE2") // Arcane blue
+	Cyan       = lipgloss.Color("#76D7C4") // Ethereal cyan
+	Green      = lipgloss.Color("#58D68D") // Nature green
+	Emerald    = lipgloss.Color("#27AE60") // Deep emerald
+	Pink       = lipgloss.Color("#FF6B9D") // Enchanted pink
+	Magenta    = lipgloss.Color("#E91E8C") // Vivid magenta
+
+	// Neutrals
+	White      = lipgloss.Color("#FDFEFE")
+	LightGray  = lipgloss.Color("#D5D8DC")
+	Gray       = lipgloss.Color("#AAB7B8")
+	DarkGray   = lipgloss.Color("#5D6D7E")
+	Charcoal   = lipgloss.Color("#2C3E50")
+	Black      = lipgloss.Color("#1C2833")
 )
 
-// Text styles
+// ═══════════════════════════════════════════════════════════════════════════════
+// TEXT STYLES
+// ═══════════════════════════════════════════════════════════════════════════════
+
 var (
-	// Title is the main title style - golden header
+	// Title - gradient effect simulated with bold gold
 	Title = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(Gold).
-		MarginBottom(1)
+		Foreground(Gold)
 
 	// Subtitle for secondary headings
 	Subtitle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(Amber)
+		Bold(true).
+		Foreground(Amber)
 
 	// Success messages
 	Success = lipgloss.NewStyle().
@@ -51,7 +72,7 @@ var (
 
 	// Warning messages
 	Warning = lipgloss.NewStyle().
-		Foreground(Orange)
+		Foreground(Copper)
 
 	// Info messages
 	Info = lipgloss.NewStyle().
@@ -61,107 +82,365 @@ var (
 	Muted = lipgloss.NewStyle().
 		Foreground(Gray)
 
-	// Highlight for important items - golden emphasis
+	// Dim - even more subtle
+	Dim = lipgloss.NewStyle().
+		Foreground(DarkGray)
+
+	// Highlight for important items
 	Highlight = lipgloss.NewStyle().
-			Foreground(Yellow).
-			Bold(true)
-)
-
-// Component styles
-var (
-	// Box for bordered containers - scroll-like appearance
-	Box = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(Sepia).
-		Padding(1, 2)
-
-	// ListItem for list entries
-	ListItem = lipgloss.NewStyle().
-			PaddingLeft(2)
-
-	// SelectedItem for highlighted list items
-	SelectedItem = lipgloss.NewStyle().
-			Foreground(Gold).
-			Bold(true).
-			PaddingLeft(2)
-
-	// Badge for type indicators
-	Badge = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Background(Purple).
-		Padding(0, 1).
-		MarginRight(1)
-)
-
-// Artifact type badges with book-themed styling
-var (
-	SkillBadge  = Badge.Background(Purple).Render("✦ SKILL")
-	CmdBadge    = Badge.Background(Blue).Render("⌘ CMD")
-	PromptBadge = Badge.Background(Green).Render("✎ PROMPT")
-	HookBadge   = Badge.Background(Orange).Render("⚡ HOOK")
-)
-
-// Logo returns the styled Tome logo - ancient book aesthetic
-func Logo() string {
-	// Book/tome ASCII art
-	logo := `
-       ┌─────────────────────┐
-       │  ═══════════════    │
-       │    ╔╦╗╔═╗╔╦╗╔═╗     │
-       │     ║ ║ ║║║║║╣      │
-       │     ╩ ╚═╝╩ ╩╚═╝     │
-       │  ═══════════════    │
-       │    ✦ Your Grimoire  │
-       └─────────────────────┘`
-
-	return lipgloss.NewStyle().
 		Foreground(Gold).
-		Bold(true).
-		Render(logo)
-}
+		Bold(true)
 
-// ScrollTop returns the top of a scroll decoration
-func ScrollTop(width int) string {
-	if width < 4 {
-		width = 4
+	// Link style
+	Link = lipgloss.NewStyle().
+		Foreground(Cyan).
+		Underline(true)
+
+	// Code/command style
+	Code = lipgloss.NewStyle().
+		Foreground(Magenta)
+)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PANEL STYLES - Card-like containers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var (
+	// Panel border style
+	panelBorder = lipgloss.RoundedBorder()
+
+	// Main panel - elegant rounded box
+	Panel = lipgloss.NewStyle().
+		Border(panelBorder).
+		BorderForeground(DarkGray).
+		Padding(0, 1)
+
+	// Highlighted panel
+	PanelHighlight = lipgloss.NewStyle().
+		Border(panelBorder).
+		BorderForeground(Gold).
+		Padding(0, 1)
+
+	// Success panel
+	PanelSuccess = lipgloss.NewStyle().
+		Border(panelBorder).
+		BorderForeground(Green).
+		Padding(0, 1)
+
+	// Error panel
+	PanelError = lipgloss.NewStyle().
+		Border(panelBorder).
+		BorderForeground(Pink).
+		Padding(0, 1)
+)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BADGES - Type indicators with flair
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var (
+	baseBadge = lipgloss.NewStyle().
+		Padding(0, 1).
+		Bold(true)
+
+	// Artifact type badges
+	SkillBadge  = baseBadge.Background(Purple).Foreground(White).Render("✦ SKILL")
+	CmdBadge    = baseBadge.Background(Blue).Foreground(White).Render("⌘ CMD")
+	PromptBadge = baseBadge.Background(Emerald).Foreground(White).Render("✎ PROMPT")
+	HookBadge   = baseBadge.Background(Copper).Foreground(White).Render("⚡ HOOK")
+
+	// Status badges
+	StatusOK     = baseBadge.Background(Green).Foreground(White).Render("✓")
+	StatusWarn   = baseBadge.Background(Copper).Foreground(White).Render("!")
+	StatusError  = baseBadge.Background(Pink).Foreground(White).Render("✗")
+	StatusNew    = baseBadge.Background(Cyan).Foreground(White).Render("NEW")
+	StatusUpdate = baseBadge.Background(Gold).Foreground(Black).Render("UPD")
+)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGO - The centerpiece
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Logo returns the stunning Tome logo
+func Logo() string {
+	// Book/tome ASCII art with gradient coloring
+	lines := []struct {
+		text  string
+		color lipgloss.Color
+	}{
+		{"", Black},
+		{"        ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄", DarkGray},
+		{"       ██▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀██", Bronze},
+		{"       ██                        ██", Bronze},
+		{"       ██    ▀▛▘▜▛ ▙▗▌▛▀▀        ██", Gold},
+		{"       ██     ▌ ▐▌ ▌▘▌▙▄         ██", Gold},
+		{"       ██     ▌ ▐▌ ▌ ▌▌          ██", Amber},
+		{"       ██     ▘  ▘ ▘ ▘▀▀▀        ██", Amber},
+		{"       ██                        ██", Bronze},
+		{"       ██    ─────────────────   ██", DarkGray},
+		{"       ██     ✦  Your Grimoire   ██", Purple},
+		{"       ██                        ██", Bronze},
+		{"       ██▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄██", Bronze},
+		{"        ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀", DarkGray},
+		{"", Black},
 	}
-	inner := strings.Repeat("═", width-2)
-	return lipgloss.NewStyle().
-		Foreground(Sepia).
-		Render("╔" + inner + "╗")
-}
 
-// ScrollBottom returns the bottom of a scroll decoration
-func ScrollBottom(width int) string {
-	if width < 4 {
-		width = 4
+	var result strings.Builder
+	for _, line := range lines {
+		styled := lipgloss.NewStyle().Foreground(line.color).Render(line.text)
+		result.WriteString(styled)
+		result.WriteString("\n")
 	}
-	inner := strings.Repeat("═", width-2)
-	return lipgloss.NewStyle().
-		Foreground(Sepia).
-		Render("╚" + inner + "╝")
+
+	return result.String()
 }
 
-// Divider returns a horizontal divider - scroll flourish style
+// LogoCompact returns a smaller logo for headers
+func LogoCompact() string {
+	book := lipgloss.NewStyle().Foreground(Bronze).Render("📖")
+	name := lipgloss.NewStyle().Foreground(Gold).Bold(true).Render("TOME")
+	return fmt.Sprintf(" %s %s ", book, name)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DECORATIVE ELEMENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Divider returns a horizontal divider
 func Divider(width int) string {
 	return lipgloss.NewStyle().
-		Foreground(Sepia).
-		Render("  " + strings.Repeat("─", width-4) + "  ")
+		Foreground(DarkGray).
+		Render(strings.Repeat("─", width))
 }
 
-// ChapterDivider returns a fancy chapter break
-func ChapterDivider(width int) string {
-	side := (width - 5) / 2
+// DoubleDivider returns a fancy double-line divider
+func DoubleDivider(width int) string {
+	return lipgloss.NewStyle().
+		Foreground(Bronze).
+		Render(strings.Repeat("═", width))
+}
+
+// Flourish returns a decorative flourish
+func Flourish() string {
 	return lipgloss.NewStyle().
 		Foreground(Gold).
-		Render(strings.Repeat("─", side) + "  ◆  " + strings.Repeat("─", side))
+		Render("  ─── ✦ ───  ")
 }
 
-// PageHeader returns a decorative page header
-func PageHeader(title string) string {
-	styled := lipgloss.NewStyle().
+// SectionHeader creates a decorated section header
+func SectionHeader(title string, width int) string {
+	titleStyled := lipgloss.NewStyle().
 		Foreground(Gold).
 		Bold(true).
 		Render(title)
-	return "  📜 " + styled
+
+	titleLen := lipgloss.Width(title)
+	padLeft := (width - titleLen - 6) / 2
+	padRight := width - titleLen - 6 - padLeft
+
+	left := lipgloss.NewStyle().Foreground(DarkGray).Render(strings.Repeat("─", padLeft) + "┤ ")
+	right := lipgloss.NewStyle().Foreground(DarkGray).Render(" ├" + strings.Repeat("─", padRight))
+
+	return left + titleStyled + right
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CARDS - For displaying artifacts
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ArtifactCard creates a beautiful card for an artifact
+func ArtifactCard(badge, name, description string, width int) string {
+	nameStyled := lipgloss.NewStyle().
+		Foreground(White).
+		Bold(true).
+		Render(name)
+
+	// Truncate description if needed
+	maxDescLen := width - 6
+	if len(description) > maxDescLen {
+		description = description[:maxDescLen-3] + "..."
+	}
+
+	descStyled := lipgloss.NewStyle().
+		Foreground(Gray).
+		Render(description)
+
+	content := fmt.Sprintf("%s  %s\n   %s", badge, nameStyled, descStyled)
+
+	return content
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TABLES - For structured data
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// TableHeader creates a styled table header
+func TableHeader(columns ...string) string {
+	var cells []string
+	for _, col := range columns {
+		cells = append(cells, lipgloss.NewStyle().
+			Foreground(Gold).
+			Bold(true).
+			Render(col))
+	}
+	return strings.Join(cells, "  ")
+}
+
+// TableRow creates a styled table row
+func TableRow(columns ...string) string {
+	var cells []string
+	for i, col := range columns {
+		style := lipgloss.NewStyle().Foreground(White)
+		if i > 0 {
+			style = style.Foreground(Gray)
+		}
+		cells = append(cells, style.Render(col))
+	}
+	return strings.Join(cells, "  ")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROGRESS INDICATORS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// Spinner returns a spinner frame (for animated use)
+func Spinner(frame int) string {
+	return lipgloss.NewStyle().
+		Foreground(Purple).
+		Render(spinnerFrames[frame%len(spinnerFrames)])
+}
+
+// StaticSpinner returns a static loading indicator
+func StaticSpinner() string {
+	return lipgloss.NewStyle().
+		Foreground(Purple).
+		Render("◐")
+}
+
+// ProgressDots returns animated-style dots
+func ProgressDots(count int) string {
+	dots := strings.Repeat("●", count) + strings.Repeat("○", 3-count)
+	return lipgloss.NewStyle().
+		Foreground(Purple).
+		Render(dots)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STATUS LINE COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// StatusLine creates a status line with icon and message
+func StatusLine(icon, message string, color lipgloss.Color) string {
+	iconStyled := lipgloss.NewStyle().Foreground(color).Render(icon)
+	msgStyled := lipgloss.NewStyle().Foreground(color).Render(message)
+	return fmt.Sprintf("  %s %s", iconStyled, msgStyled)
+}
+
+// SuccessLine creates a success status line
+func SuccessLine(message string) string {
+	return StatusLine("✓", message, Green)
+}
+
+// ErrorLine creates an error status line
+func ErrorLine(message string) string {
+	return StatusLine("✗", message, Pink)
+}
+
+// WarningLine creates a warning status line
+func WarningLine(message string) string {
+	return StatusLine("!", message, Copper)
+}
+
+// InfoLine creates an info status line
+func InfoLine(message string) string {
+	return StatusLine("→", message, Blue)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMPTY STATES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// EmptyTome returns a friendly empty state
+func EmptyTome() string {
+	book := lipgloss.NewStyle().Foreground(DarkGray).Render(`
+      ┌─────────────┐
+      │             │
+      │   (empty)   │
+      │             │
+      └─────────────┘`)
+
+	message := lipgloss.NewStyle().Foreground(Gray).Render("Your tome awaits its first inscription...")
+	hint := lipgloss.NewStyle().Foreground(Cyan).Render("tome learn <source>")
+
+	return fmt.Sprintf("%s\n\n  %s\n  Use %s to begin.\n", book, message, hint)
+}
+
+// NoResults returns a friendly no-results state
+func NoResults(query string) string {
+	crystal := lipgloss.NewStyle().Foreground(DarkGray).Render("🔮")
+	message := lipgloss.NewStyle().Foreground(Gray).Render(fmt.Sprintf("No artifacts found for \"%s\"", query))
+	hint := lipgloss.NewStyle().Foreground(Cyan).Render("Try broader search terms")
+
+	return fmt.Sprintf("\n  %s %s\n  %s\n", crystal, message, hint)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Pad adds padding to text
+func Pad(text string, left int) string {
+	return strings.Repeat(" ", left) + text
+}
+
+// Truncate truncates text to max length with ellipsis
+func Truncate(text string, max int) string {
+	if len(text) <= max {
+		return text
+	}
+	return text[:max-3] + "..."
+}
+
+// Box wraps content in a styled box
+func Box(content string, width int, borderColor lipgloss.Color) string {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Width(width).
+		Padding(0, 1).
+		Render(content)
+}
+
+// GradientText applies a gradient-like effect to text (alternating colors)
+func GradientText(text string, colors ...lipgloss.Color) string {
+	if len(colors) == 0 {
+		return text
+	}
+
+	var result strings.Builder
+	runes := []rune(text)
+	for i, r := range runes {
+		color := colors[i%len(colors)]
+		styled := lipgloss.NewStyle().Foreground(color).Render(string(r))
+		result.WriteString(styled)
+	}
+	return result.String()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PAGE TEMPLATES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// PageHeader creates a consistent page header
+func PageHeader(title string) string {
+	icon := lipgloss.NewStyle().Foreground(Gold).Render("📜")
+	titleStyled := lipgloss.NewStyle().Foreground(Gold).Bold(true).Render(title)
+	return fmt.Sprintf("\n  %s %s\n", icon, titleStyled)
+}
+
+// PageFooter creates a consistent page footer
+func PageFooter() string {
+	return lipgloss.NewStyle().Foreground(DarkGray).Render("\n  ─── ✦ ───\n")
 }

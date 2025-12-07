@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/kennyg/tome/internal/ui"
@@ -46,7 +47,9 @@ func runSearch(cmd *cobra.Command, args []string) {
 	query := strings.Join(args, " ")
 
 	fmt.Println()
-	fmt.Println(ui.Title.Render("  Searching for: " + query))
+	fmt.Println(ui.SectionHeader("Seeking: "+query, 56))
+	fmt.Println()
+	fmt.Println(ui.InfoLine("Searching the archives..."))
 	fmt.Println()
 
 	// Check if gh CLI is available
@@ -56,13 +59,11 @@ func runSearch(cmd *cobra.Command, args []string) {
 	}
 
 	// Search for repositories with SKILL.md files
-	// We search for repos containing SKILL.md and matching the query
 	searchQuery := fmt.Sprintf("%s filename:SKILL.md", query)
 
 	ghCmd := exec.Command(ghPath, "search", "code", searchQuery, "--json", "repository", "--limit", fmt.Sprintf("%d", searchLimit*2))
 	output, err := ghCmd.Output()
 	if err != nil {
-		// Try searching repos directly as fallback
 		searchRepos(ghPath, query)
 		return
 	}
@@ -97,14 +98,18 @@ func runSearch(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	fmt.Println(ui.Success.Render(fmt.Sprintf("  Found %d repositories with skills:", len(repos))))
+	fmt.Println(ui.SuccessLine(fmt.Sprintf("Found %d grimoires with artifacts", len(repos))))
 	fmt.Println()
 
 	for _, repo := range repos {
-		fmt.Printf("  %s %s\n", ui.SkillBadge, ui.Highlight.Render(repo))
-		fmt.Println(ui.Muted.Render(fmt.Sprintf("      tome learn %s", repo)))
+		name := lipgloss.NewStyle().Foreground(ui.White).Bold(true).Render(repo)
+		cmd := lipgloss.NewStyle().Foreground(ui.Cyan).Render("tome learn " + repo)
+		fmt.Printf("  %s  %s\n", ui.SkillBadge, name)
+		fmt.Printf("       %s\n", cmd)
 		fmt.Println()
 	}
+
+	fmt.Println(ui.PageFooter())
 }
 
 func searchRepos(ghPath, query string) {
@@ -114,42 +119,42 @@ func searchRepos(ghPath, query string) {
 	ghCmd := exec.Command(ghPath, "search", "repos", searchQuery, "--json", "fullName,description,stargazersCount", "--limit", fmt.Sprintf("%d", searchLimit))
 	output, err := ghCmd.Output()
 	if err != nil {
-		fmt.Println(ui.Warning.Render("  No results found."))
-		fmt.Println()
-		fmt.Println(ui.Muted.Render("  Try a different search term or browse GitHub directly."))
+		fmt.Print(ui.NoResults(query))
 		return
 	}
 
 	var repos []GitHubSearchResult
 	if err := json.Unmarshal(output, &repos); err != nil {
-		fmt.Println(ui.Warning.Render("  Failed to parse search results."))
+		fmt.Println(ui.ErrorLine("Failed to parse search results"))
 		return
 	}
 
 	if len(repos) == 0 {
-		fmt.Println(ui.Muted.Render("  No repositories found matching your query."))
-		fmt.Println()
-		fmt.Println(ui.Info.Render("  Tip: Try broader search terms or check GitHub directly."))
+		fmt.Print(ui.NoResults(query))
 		return
 	}
 
-	fmt.Println(ui.Success.Render(fmt.Sprintf("  Found %d repositories:", len(repos))))
+	fmt.Println(ui.SuccessLine(fmt.Sprintf("Found %d repositories", len(repos))))
 	fmt.Println()
 
 	for _, repo := range repos {
+		name := lipgloss.NewStyle().Foreground(ui.White).Bold(true).Render(repo.FullName)
 		stars := ""
 		if repo.Stars > 0 {
-			stars = ui.Muted.Render(fmt.Sprintf(" ★ %d", repo.Stars))
+			stars = lipgloss.NewStyle().Foreground(ui.Gold).Render(fmt.Sprintf(" ★ %d", repo.Stars))
 		}
-		fmt.Printf("  %s%s\n", ui.Highlight.Render(repo.FullName), stars)
+		fmt.Printf("  %s%s\n", name, stars)
+
 		if repo.Description != "" {
-			desc := repo.Description
-			if len(desc) > 60 {
-				desc = desc[:60] + "..."
-			}
-			fmt.Println(ui.Muted.Render("      " + desc))
+			desc := ui.Truncate(repo.Description, 55)
+			descStyled := lipgloss.NewStyle().Foreground(ui.Gray).Render(desc)
+			fmt.Printf("  %s\n", descStyled)
 		}
-		fmt.Println(ui.Info.Render(fmt.Sprintf("      tome learn %s", repo.FullName)))
+
+		cmd := lipgloss.NewStyle().Foreground(ui.Cyan).Render("tome learn " + repo.FullName)
+		fmt.Printf("  %s\n", cmd)
 		fmt.Println()
 	}
+
+	fmt.Println(ui.PageFooter())
 }

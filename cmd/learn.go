@@ -59,7 +59,9 @@ func runLearn(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.Title.Render("  Learning from " + src.String()))
+	fmt.Println(ui.SectionHeader("Inscribing", 56))
+	fmt.Println()
+	fmt.Println(ui.InfoLine("Source: " + src.String()))
 	fmt.Println()
 
 	// Determine which agent to use
@@ -77,7 +79,7 @@ func runLearn(cmd *cobra.Command, args []string) {
 	}
 
 	agentCfg := config.GetAgentConfig(agent)
-	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Target: %s", agentCfg.DisplayName)))
+	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Target agent: %s", agentCfg.DisplayName)))
 	fmt.Println()
 
 	// Ensure directories exist
@@ -180,15 +182,14 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 	}
 
 	// Summary
-	fmt.Println(ui.Divider(50))
 	fmt.Println()
-	fmt.Println(ui.Success.Render(fmt.Sprintf("  Learned %d artifact(s):", len(installed))))
+	fmt.Println(ui.SuccessLine(fmt.Sprintf("Inscribed %d artifact(s)", len(installed))))
 	for _, name := range installed {
 		fmt.Println(ui.Muted.Render("    • " + name))
 	}
 	fmt.Println()
-	fmt.Println(ui.Muted.Render("  Your tome grows stronger."))
-	fmt.Println()
+	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
+	fmt.Println(ui.PageFooter())
 }
 
 func learnSingleFile(client *fetch.Client, url, filename, source string, paths *config.Paths) {
@@ -304,40 +305,32 @@ func learnFromLocal(src *source.Source, paths *config.Paths) {
 	}
 
 	// Summary
-	fmt.Println(ui.Divider(50))
 	fmt.Println()
-	fmt.Println(ui.Success.Render(fmt.Sprintf("  Learned %d artifact(s):", len(installed))))
+	fmt.Println(ui.SuccessLine(fmt.Sprintf("Inscribed %d artifact(s)", len(installed))))
 	for _, name := range installed {
 		fmt.Println(ui.Muted.Render("    • " + name))
 	}
 	fmt.Println()
-	fmt.Println(ui.Muted.Render("  Your tome grows stronger."))
-	fmt.Println()
+	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
+	fmt.Println(ui.PageFooter())
 }
 
 func installArtifact(art *artifact.Artifact, paths *config.Paths) {
-	fmt.Println(ui.Divider(50))
-	fmt.Println()
-
 	doInstall(art, paths)
 
 	// Success output
 	badge := getBadge(art.Type)
-	fmt.Printf("  %s %s\n", badge, ui.Highlight.Render(art.Name))
-	fmt.Println()
+	fmt.Printf("\n  %s %s\n", badge, ui.Highlight.Render(art.Name))
 	if art.Description != "" {
-		// Wrap description
-		desc := art.Description
-		if len(desc) > 60 {
-			desc = desc[:60] + "..."
-		}
+		desc := ui.Truncate(art.Description, 55)
 		fmt.Println(ui.Muted.Render("  " + desc))
-		fmt.Println()
 	}
-	fmt.Println(ui.Success.Render("  Installed to " + getInstallPath(art, paths)))
 	fmt.Println()
-	fmt.Println(ui.Muted.Render("  Your tome grows stronger."))
+	fmt.Println(ui.SuccessLine("Inscribed successfully"))
+	fmt.Println(ui.Dim.Render("  " + getInstallPath(art, paths)))
 	fmt.Println()
+	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
+	fmt.Println(ui.PageFooter())
 }
 
 func installArtifactQuiet(art *artifact.Artifact, paths *config.Paths) {
