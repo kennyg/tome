@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,10 @@ import (
 	"github.com/kennyg/tome/internal/apropos"
 	"github.com/kennyg/tome/internal/config"
 	"github.com/kennyg/tome/internal/ui"
+)
+
+var (
+	aproposJSON bool
 )
 
 var aproposCmd = &cobra.Command{
@@ -26,7 +31,8 @@ Searches skill names, descriptions, and extracted keywords.
 Examples:
   tome apropos pdf          # Find skills related to PDF
   tome apropos "create chart"  # Find skills for creating charts
-  tome apropos spreadsheet  # Find spreadsheet-related skills`,
+  tome apropos spreadsheet  # Find spreadsheet-related skills
+  tome apropos --json pdf   # Output as JSON (for AI agents)`,
 	Args: cobra.MinimumNArgs(1),
 	Run:  runApropos,
 }
@@ -46,19 +52,35 @@ var aproposListCmd = &cobra.Command{
 }
 
 func init() {
+	aproposCmd.Flags().BoolVar(&aproposJSON, "json", false, "Output as JSON (for AI agents)")
 	aproposCmd.AddCommand(aproposRebuildCmd)
 	aproposCmd.AddCommand(aproposListCmd)
+}
+
+// JSONResult is the structured output for AI agents
+type JSONResult struct {
+	Query   string       `json:"query"`
+	Count   int          `json:"count"`
+	Results []JSONSkill  `json:"results"`
+}
+
+// JSONSkill is a skill in JSON output
+type JSONSkill struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Score       int    `json:"score"`
+	Invoke      string `json:"invoke"`
 }
 
 func runApropos(cmd *cobra.Command, args []string) {
 	query := strings.Join(args, " ")
 
-	fmt.Println()
-	fmt.Println(ui.SectionHeader("Apropos: "+query, 56))
-	fmt.Println()
-
 	paths, err := config.GetPaths()
 	if err != nil {
+		if aproposJSON {
+			outputJSONError(err.Error())
+			return
+		}
 		exitWithError("Failed to get paths: " + err.Error())
 	}
 
@@ -71,11 +93,28 @@ func runApropos(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Load or build index
-	index, err := getOrBuildIndex(skillsDirs, paths.SkillsDir, false)
+	// Load or build index (quiet mode for JSON)
+	index, err := getOrBuildIndexQuiet(skillsDirs, paths.SkillsDir, false, aproposJSON)
 	if err != nil {
+		if aproposJSON {
+			outputJSONError(err.Error())
+			return
+		}
 		exitWithError("Failed to load index: " + err.Error())
 	}
+
+	results := apropos.Search(index, query)
+
+	// JSON output
+	if aproposJSON {
+		outputJSON(query, results)
+		return
+	}
+
+	// Human-readable output
+	fmt.Println()
+	fmt.Println(ui.SectionHeader("Apropos: "+query, 56))
+	fmt.Println()
 
 	if index == nil || len(index.Skills) == 0 {
 		fmt.Println(ui.WarningLine("No skills indexed"))
@@ -85,8 +124,6 @@ func runApropos(cmd *cobra.Command, args []string) {
 		fmt.Println(ui.PageFooter())
 		return
 	}
-
-	results := apropos.Search(index, query)
 
 	if len(results) == 0 {
 		fmt.Print(ui.NoResults(query))
@@ -102,6 +139,32 @@ func runApropos(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Println(ui.PageFooter())
+}
+
+func outputJSON(query string, results []apropos.SearchResult) {
+	out := JSONResult{
+		Query:   query,
+		Count:   len(results),
+		Results: make([]JSONSkill, len(results)),
+	}
+
+	for i, r := range results {
+		out.Results[i] = JSONSkill{
+			Name:        r.Skill.Name,
+			Description: r.Skill.Description,
+			Score:       r.Score,
+			Invoke:      fmt.Sprintf("Skill: %s", r.Skill.Name),
+		}
+	}
+
+	data, _ := json.MarshalIndent(out, "", "  ")
+	fmt.Println(string(data))
+}
+
+func outputJSONError(msg string) {
+	out := map[string]string{"error": msg}
+	data, _ := json.Marshal(out)
+	fmt.Println(string(data))
 }
 
 func runAproposRebuild(cmd *cobra.Command, args []string) {
@@ -172,6 +235,10 @@ func runAproposList(cmd *cobra.Command, args []string) {
 }
 
 func getOrBuildIndex(skillsDirs []string, primaryDir string, forceRebuild bool) (*apropos.Index, error) {
+	return getOrBuildIndexQuiet(skillsDirs, primaryDir, forceRebuild, false)
+}
+
+func getOrBuildIndexQuiet(skillsDirs []string, primaryDir string, forceRebuild bool, quiet bool) (*apropos.Index, error) {
 	if !forceRebuild {
 		index, err := apropos.LoadIndex(primaryDir)
 		if err != nil {
@@ -183,12 +250,18 @@ func getOrBuildIndex(skillsDirs []string, primaryDir string, forceRebuild bool) 
 			if err == nil && !stale {
 				return index, nil
 			}
-			fmt.Println(ui.InfoLine("Index stale, rebuilding..."))
+			if !quiet {
+				fmt.Println(ui.InfoLine("Index stale, rebuilding..."))
+			}
 		} else {
-			fmt.Println(ui.InfoLine("Building index..."))
+			if !quiet {
+				fmt.Println(ui.InfoLine("Building index..."))
+			}
 		}
 	} else {
-		fmt.Println(ui.InfoLine("Force rebuilding index..."))
+		if !quiet {
+			fmt.Println(ui.InfoLine("Force rebuilding index..."))
+		}
 	}
 
 	index, err := apropos.BuildIndex(skillsDirs)
@@ -198,7 +271,9 @@ func getOrBuildIndex(skillsDirs []string, primaryDir string, forceRebuild bool) 
 
 	if err := apropos.SaveIndex(primaryDir, index); err != nil {
 		// Non-fatal, just warn
-		fmt.Println(ui.WarningLine("Could not save index: " + err.Error()))
+		if !quiet {
+			fmt.Println(ui.WarningLine("Could not save index: " + err.Error()))
+		}
 	}
 
 	return index, nil
