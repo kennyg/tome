@@ -32,6 +32,7 @@ func Execute() error {
 }
 
 func init() {
+	rootCmd.AddCommand(aproposCmd)
 	rootCmd.AddCommand(attuneCmd)
 	rootCmd.AddCommand(learnCmd)
 	rootCmd.AddCommand(listCmd)
