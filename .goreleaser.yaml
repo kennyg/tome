@@ -57,5 +57,15 @@ release:
   prerelease: auto
   name_template: "v{{.Version}}"
 
-# Note: Homebrew formula is maintained manually in kennyg/homebrew-tap
-# Building from source avoids macOS notarization requirements
+brews:
+  - repository:
+      owner: kennyg
+      name: homebrew-tap
+    directory: Formula
+    homepage: "https://github.com/kennyg/tome"
+    description: "Your spellbook for AI agent capabilities. Discover, install, and manage skills, commands, and prompts."
+    license: "MIT"
+    install: |
+      bin.install "tome"
+    test: |
+      system "#{bin}/tome", "edition"
