@@ -85,6 +85,15 @@ tome seek cursor --stars 100    # Filter by popularity
 
 *Aliases: `search`, `find`*
 
+### Preview Before Installing
+
+```bash
+tome peek owner/repo            # See what's in a collection
+tome peek owner/repo:path       # Preview a specific skill
+```
+
+*Aliases: `preview`, `inspect`*
+
 ### Inspect Details
 
 ```bash
