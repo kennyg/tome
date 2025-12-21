@@ -468,6 +468,11 @@ func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes
 			if err := os.WriteFile(incPath, inc.Content, 0644); err != nil {
 				exitWithError(fmt.Sprintf("failed to write %s: %v", inc.Path, err))
 			}
+
+			// Make scripts executable
+			if isScript(inc.Path, inc.Content) {
+				os.Chmod(incPath, 0755)
+			}
 		}
 	}
 
@@ -621,4 +626,22 @@ func learnPlugin(client *fetch.Client, src *source.Source, apiURL string, paths 
 	fmt.Println()
 	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
 	fmt.Println(ui.PageFooter())
+}
+
+// isScript returns true if the file appears to be a script that should be executable.
+// Detects by file extension (.sh, .bash, .zsh, .fish, .py, .rb, .pl) or shebang (#!).
+func isScript(path string, content []byte) bool {
+	// Check extension
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".sh", ".bash", ".zsh", ".fish", ".py", ".rb", ".pl":
+		return true
+	}
+
+	// Check for shebang
+	if len(content) >= 2 && content[0] == '#' && content[1] == '!' {
+		return true
+	}
+
+	return false
 }
