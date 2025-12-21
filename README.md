@@ -33,6 +33,16 @@ brew install kennyg/tap/tome
 go install github.com/kennyg/tome@latest
 ```
 
+### GitHub Token (Optional)
+
+Tome works without authentication for public repositories. For higher rate limits (5000 vs 60 requests/hour) or private repos, set a GitHub token:
+
+```bash
+export GITHUB_TOKEN=ghp_your_token_here
+```
+
+Tome automatically discovers tokens from `GITHUB_TOKEN`, `GH_TOKEN`, or your gh CLI config.
+
 ## Quick Start
 
 Install your first skill collection:
