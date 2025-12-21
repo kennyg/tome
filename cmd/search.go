@@ -1,14 +1,14 @@
 package cmd
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
+	"github.com/kennyg/tome/internal/ghclient"
 	"github.com/kennyg/tome/internal/ui"
 )
 
@@ -34,15 +34,6 @@ func init() {
 	searchCmd.Flags().IntVarP(&searchLimit, "limit", "n", 10, "Maximum results to show")
 }
 
-// GitHubSearchResult represents a repository from GitHub search
-type GitHubSearchResult struct {
-	FullName    string `json:"full_name"`
-	Description string `json:"description"`
-	HTMLURL     string `json:"html_url"`
-	Stars       int    `json:"stargazers_count"`
-	UpdatedAt   string `json:"updated_at"`
-}
-
 func runSearch(cmd *cobra.Command, args []string) {
 	query := strings.Join(args, " ")
 
@@ -52,36 +43,15 @@ func runSearch(cmd *cobra.Command, args []string) {
 	fmt.Println(ui.InfoLine("Searching the archives..."))
 	fmt.Println()
 
-	// Check if gh CLI is available
-	ghPath, err := exec.LookPath("gh")
-	if err != nil {
-		exitWithError("GitHub CLI (gh) not found. Install it from https://cli.github.com")
-	}
+	gh := ghclient.New()
+	ctx := context.Background()
 
 	// Search for repositories with SKILL.md files
 	searchQuery := fmt.Sprintf("%s filename:SKILL.md", query)
 
-	ghCmd := exec.Command(ghPath, "search", "code", searchQuery, "--json", "repository", "--limit", fmt.Sprintf("%d", searchLimit*2))
-	output, err := ghCmd.Output()
-	if err != nil {
-		searchRepos(ghPath, query)
-		return
-	}
-
-	var codeResults []struct {
-		Repository struct {
-			NameWithOwner string `json:"nameWithOwner"`
-			Description   string `json:"description"`
-		} `json:"repository"`
-	}
-
-	if err := json.Unmarshal(output, &codeResults); err != nil {
-		searchRepos(ghPath, query)
-		return
-	}
-
-	if len(codeResults) == 0 {
-		searchRepos(ghPath, query)
+	codeResults, err := gh.SearchCode(ctx, searchQuery, searchLimit*2)
+	if err != nil || len(codeResults) == 0 {
+		searchRepos(gh, ctx, query)
 		return
 	}
 
@@ -89,9 +59,9 @@ func runSearch(cmd *cobra.Command, args []string) {
 	seen := make(map[string]bool)
 	var repos []string
 	for _, r := range codeResults {
-		if !seen[r.Repository.NameWithOwner] {
-			seen[r.Repository.NameWithOwner] = true
-			repos = append(repos, r.Repository.NameWithOwner)
+		if !seen[r.Repository] {
+			seen[r.Repository] = true
+			repos = append(repos, r.Repository)
 			if len(repos) >= searchLimit {
 				break
 			}
@@ -103,29 +73,22 @@ func runSearch(cmd *cobra.Command, args []string) {
 
 	for _, repo := range repos {
 		name := lipgloss.NewStyle().Foreground(ui.White).Bold(true).Render(repo)
-		cmd := lipgloss.NewStyle().Foreground(ui.Cyan).Render("tome learn " + repo)
+		cmdText := lipgloss.NewStyle().Foreground(ui.Cyan).Render("tome learn " + repo)
 		fmt.Printf("  %s  %s\n", ui.SkillBadge, name)
-		fmt.Printf("       %s\n", cmd)
+		fmt.Printf("       %s\n", cmdText)
 		fmt.Println()
 	}
 
 	fmt.Println(ui.PageFooter())
 }
 
-func searchRepos(ghPath, query string) {
+func searchRepos(gh *ghclient.Client, ctx context.Context, query string) {
 	// Fallback: search for repos mentioning claude-code or skills
 	searchQuery := fmt.Sprintf("%s claude-code OR SKILL.md in:readme,name,description", query)
 
-	ghCmd := exec.Command(ghPath, "search", "repos", searchQuery, "--json", "fullName,description,stargazersCount", "--limit", fmt.Sprintf("%d", searchLimit))
-	output, err := ghCmd.Output()
+	repos, err := gh.SearchRepos(ctx, searchQuery, searchLimit)
 	if err != nil {
 		fmt.Print(ui.NoResults(query))
-		return
-	}
-
-	var repos []GitHubSearchResult
-	if err := json.Unmarshal(output, &repos); err != nil {
-		fmt.Println(ui.ErrorLine("Failed to parse search results"))
 		return
 	}
 
@@ -151,8 +114,8 @@ func searchRepos(ghPath, query string) {
 			fmt.Printf("  %s\n", descStyled)
 		}
 
-		cmd := lipgloss.NewStyle().Foreground(ui.Cyan).Render("tome learn " + repo.FullName)
-		fmt.Printf("  %s\n", cmd)
+		cmdText := lipgloss.NewStyle().Foreground(ui.Cyan).Render("tome learn " + repo.FullName)
+		fmt.Printf("  %s\n", cmdText)
 		fmt.Println()
 	}
 

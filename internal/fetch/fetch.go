@@ -1,13 +1,12 @@
 package fetch
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -16,36 +15,29 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/kennyg/tome/internal/artifact"
+	"github.com/kennyg/tome/internal/ghclient"
 )
 
 // Client handles fetching artifacts from remote sources
 type Client struct {
-	http   *http.Client
-	useGH  bool   // Use gh CLI for auth
-	ghPath string // Path to gh CLI
+	http *http.Client
+	gh   *ghclient.Client
 }
 
 // NewClient creates a new fetch client
 func NewClient() *Client {
-	c := &Client{
+	return &Client{
 		http: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		gh: ghclient.New(),
 	}
-
-	// Check if gh CLI is available
-	if path, err := exec.LookPath("gh"); err == nil {
-		c.useGH = true
-		c.ghPath = path
-	}
-
-	return c
 }
 
 // FetchURL fetches content from a URL
-func (c *Client) FetchURL(url string) ([]byte, error) {
+func (c *Client) FetchURL(rawURL string) ([]byte, error) {
 	// Try direct fetch first
-	resp, err := c.http.Get(url)
+	resp, err := c.http.Get(rawURL)
 	if err == nil {
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
@@ -53,92 +45,34 @@ func (c *Client) FetchURL(url string) ([]byte, error) {
 		}
 	}
 
-	// If failed and it's a GitHub URL, try gh CLI
-	if c.useGH && (strings.Contains(url, "github.com") || strings.Contains(url, "githubusercontent.com")) {
-		content, err := c.fetchWithGH(url)
-		if err == nil {
+	// If failed and it's a GitHub URL, try go-github
+	if strings.Contains(rawURL, "github.com") || strings.Contains(rawURL, "githubusercontent.com") {
+		content, ghErr := c.fetchWithGitHub(rawURL)
+		if ghErr == nil {
 			return content, nil
 		}
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch %s: %w", url, err)
+		return nil, fmt.Errorf("failed to fetch %s: %w", rawURL, err)
 	}
-	return nil, fmt.Errorf("failed to fetch %s: status %d", url, resp.StatusCode)
+	return nil, fmt.Errorf("failed to fetch %s: status %d", rawURL, resp.StatusCode)
 }
 
-// fetchWithGH fetches file content using gh CLI
-func (c *Client) fetchWithGH(rawURL string) ([]byte, error) {
-	// Parse the URL to get owner/repo/path
-	// Formats:
-	//   raw.githubusercontent.com/owner/repo/ref/path (public)
-	//   github.company.com/owner/repo/raw/ref/path (GHE)
-
-	var owner, repo, path, hostname string
-
-	if strings.Contains(rawURL, "raw.githubusercontent.com") {
-		// https://raw.githubusercontent.com/owner/repo/ref/path/to/file
-		parts := strings.Split(strings.TrimPrefix(rawURL, "https://raw.githubusercontent.com/"), "/")
-		if len(parts) < 4 {
-			return nil, fmt.Errorf("invalid raw URL")
-		}
-		owner = parts[0]
-		repo = parts[1]
-		// parts[2] is the ref
-		path = strings.Join(parts[3:], "/")
-		hostname = "" // Public GitHub, no hostname needed
-	} else if strings.Contains(rawURL, "/raw/") {
-		// GHE: https://github.company.com/owner/repo/raw/ref/path/to/file
-		u, err := parseGHEURL(rawURL)
-		if err != nil {
-			return nil, err
-		}
-		hostname = u.Host
-		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-		if len(parts) < 5 || parts[2] != "raw" {
-			return nil, fmt.Errorf("invalid GHE raw URL")
-		}
-		owner = parts[0]
-		repo = parts[1]
-		// parts[2] is "raw", parts[3] is ref
-		path = strings.Join(parts[4:], "/")
-	} else {
-		return nil, fmt.Errorf("unsupported GitHub URL format for gh fetch")
+// fetchWithGitHub fetches file content using go-github
+func (c *Client) fetchWithGitHub(rawURL string) ([]byte, error) {
+	owner, repo, path, hostname, err := ghclient.ParseGitHubURL(rawURL)
+	if err != nil {
+		return nil, err
 	}
 
-	// Use gh api to get file content
-	apiPath := fmt.Sprintf("repos/%s/%s/contents/%s", owner, repo, path)
-
-	var cmd *exec.Cmd
+	// Use appropriate client for the host
+	client := c.gh
 	if hostname != "" {
-		// GHE: specify the hostname
-		cmd = exec.Command(c.ghPath, "api", "--hostname", hostname, apiPath, "--jq", ".content")
-	} else {
-		cmd = exec.Command(c.ghPath, "api", apiPath, "--jq", ".content")
+		client = ghclient.NewForHost(hostname)
 	}
 
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("gh api failed: %w", err)
-	}
-
-	// Content is base64 encoded
-	content := strings.TrimSpace(string(output))
-	// Remove quotes if present
-	content = strings.Trim(content, "\"")
-
-	// Decode base64
-	decoded, err := base64Decode(content)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode content: %w", err)
-	}
-
-	return decoded, nil
-}
-
-// parseGHEURL parses a URL string
-func parseGHEURL(rawURL string) (*url.URL, error) {
-	return url.Parse(rawURL)
+	return client.GetContents(context.Background(), owner, repo, path, nil)
 }
 
 // base64Decode decodes base64 content (handles newlines in GitHub's response)
@@ -161,15 +95,13 @@ type GitHubContent struct {
 
 // ListGitHubContents lists files in a GitHub directory
 func (c *Client) ListGitHubContents(apiURL string) ([]GitHubContent, error) {
-	// Try gh CLI first for authenticated access
-	if c.useGH {
-		contents, err := c.listWithGH(apiURL)
-		if err == nil {
-			return contents, nil
-		}
-		// Fall back to unauthenticated
+	// Try go-github first for authenticated access
+	contents, err := c.listWithGitHub(apiURL)
+	if err == nil {
+		return contents, nil
 	}
 
+	// Fall back to direct HTTP (unauthenticated)
 	resp, err := c.http.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list contents: %w", err)
@@ -180,7 +112,6 @@ func (c *Client) ListGitHubContents(apiURL string) ([]GitHubContent, error) {
 		return nil, fmt.Errorf("failed to list contents: status %d", resp.StatusCode)
 	}
 
-	var contents []GitHubContent
 	if err := json.NewDecoder(resp.Body).Decode(&contents); err != nil {
 		return nil, fmt.Errorf("failed to parse contents: %w", err)
 	}
@@ -188,36 +119,40 @@ func (c *Client) ListGitHubContents(apiURL string) ([]GitHubContent, error) {
 	return contents, nil
 }
 
-// listWithGH uses gh CLI for authenticated GitHub API access
-func (c *Client) listWithGH(apiURL string) ([]GitHubContent, error) {
-	var cmd *exec.Cmd
-
-	if strings.HasPrefix(apiURL, "https://api.github.com/") {
-		// Public GitHub: https://api.github.com/repos/owner/repo/contents -> repos/owner/repo/contents
-		path := strings.TrimPrefix(apiURL, "https://api.github.com/")
-		cmd = exec.Command(c.ghPath, "api", path)
-	} else {
-		// GHE: https://github.company.com/api/v3/repos/owner/repo/contents
-		u, err := url.Parse(apiURL)
-		if err != nil {
-			return nil, fmt.Errorf("invalid API URL: %w", err)
-		}
-		// Extract path after /api/v3/
-		path := strings.TrimPrefix(u.Path, "/api/v3/")
-		if u.RawQuery != "" {
-			path += "?" + u.RawQuery
-		}
-		cmd = exec.Command(c.ghPath, "api", "--hostname", u.Host, path)
-	}
-
-	output, err := cmd.Output()
+// listWithGitHub uses go-github for GitHub API access
+func (c *Client) listWithGitHub(apiURL string) ([]GitHubContent, error) {
+	owner, repo, path, hostname, err := ghclient.ParseGitHubURL(apiURL)
 	if err != nil {
-		return nil, fmt.Errorf("gh api failed: %w", err)
+		return nil, err
 	}
 
+	// Use appropriate client for the host
+	client := c.gh
+	if hostname != "" {
+		client = ghclient.NewForHost(hostname)
+	}
+
+	repoContents, err := client.ListContents(context.Background(), owner, repo, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to GitHubContent
 	var contents []GitHubContent
-	if err := json.Unmarshal(output, &contents); err != nil {
-		return nil, fmt.Errorf("failed to parse gh output: %w", err)
+	for _, rc := range repoContents {
+		content := GitHubContent{
+			Type: rc.GetType(),
+		}
+		if rc.Name != nil {
+			content.Name = *rc.Name
+		}
+		if rc.Path != nil {
+			content.Path = *rc.Path
+		}
+		if rc.DownloadURL != nil {
+			content.DownloadURL = *rc.DownloadURL
+		}
+		contents = append(contents, content)
 	}
 
 	return contents, nil
