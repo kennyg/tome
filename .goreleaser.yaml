@@ -61,6 +61,7 @@ brews:
   - repository:
       owner: kennyg
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
     homepage: "https://github.com/kennyg/tome"
     description: "Your spellbook for AI agent capabilities. Discover, install, and manage skills, commands, and prompts."
