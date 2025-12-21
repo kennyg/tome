@@ -211,6 +211,10 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 
 	// Install each artifact
 	var installed []string
+	var skillContents []struct {
+		name    string
+		content string
+	}
 	for _, item := range artifacts {
 		url := item.DownloadURL
 		if url == "" {
@@ -262,6 +266,14 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 		art.Source = src.String()
 		installArtifactQuietWithIncludes(art, paths, includes)
 		installed = append(installed, art.Name)
+
+		// Track skill content for usage display
+		if art.Type == artifact.TypeSkill {
+			skillContents = append(skillContents, struct {
+				name    string
+				content string
+			}{art.Name, string(content)})
+		}
 	}
 
 	// Summary
@@ -272,6 +284,21 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 	}
 	fmt.Println()
 	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
+
+	// Show usage info for installed skills
+	for _, skill := range skillContents {
+		usage := extractUsageSection(skill.content)
+		if usage != "" {
+			fmt.Println()
+			fmt.Println(ui.Subtitle.Render(fmt.Sprintf("  Quick Start: %s", skill.name)))
+			fmt.Println(ui.Divider(50))
+			// Indent the usage text
+			for _, line := range strings.Split(usage, "\n") {
+				fmt.Println("  " + line)
+			}
+		}
+	}
+
 	fmt.Println(ui.PageFooter())
 }
 
@@ -626,6 +653,59 @@ func learnPlugin(client *fetch.Client, src *source.Source, apiURL string, paths 
 	fmt.Println()
 	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
 	fmt.Println(ui.PageFooter())
+}
+
+// extractUsageSection extracts a "Quick Start", "Usage", or "Examples" section from markdown content.
+// Returns the section content (without the header) or empty string if not found.
+func extractUsageSection(content string) string {
+	lines := strings.Split(content, "\n")
+	var result []string
+	inSection := false
+	sectionLevel := 0
+
+	for _, line := range lines {
+		// Check for section headers we care about
+		if strings.HasPrefix(line, "#") {
+			// Count the header level
+			level := 0
+			for _, c := range line {
+				if c == '#' {
+					level++
+				} else {
+					break
+				}
+			}
+
+			headerText := strings.ToLower(strings.TrimSpace(strings.TrimLeft(line, "# ")))
+
+			// If we're in a section and hit same or higher level header, stop
+			if inSection && level <= sectionLevel {
+				break
+			}
+
+			// Check if this is a section we want
+			if strings.Contains(headerText, "quick start") ||
+				strings.Contains(headerText, "usage") ||
+				strings.Contains(headerText, "examples") ||
+				strings.Contains(headerText, "getting started") {
+				inSection = true
+				sectionLevel = level
+				continue // Skip the header line itself
+			}
+		}
+
+		if inSection {
+			result = append(result, line)
+		}
+	}
+
+	// Trim leading/trailing empty lines and limit to ~15 lines
+	text := strings.TrimSpace(strings.Join(result, "\n"))
+	lines = strings.Split(text, "\n")
+	if len(lines) > 15 {
+		lines = append(lines[:15], "  ...")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // isScript returns true if the file appears to be a script that should be executable.
