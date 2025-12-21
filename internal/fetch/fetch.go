@@ -235,6 +235,16 @@ func appendPath(baseURL, segment string) string {
 	return base + "/" + segment + query
 }
 
+// agentSkillDirs are directories where different AI agents store skills
+var agentSkillDirs = []string{
+	"skills",          // Generic/tome standard
+	".agent/skills",   // agentskills.io standard
+	".github/skills",  // GitHub Copilot
+	".claude/skills",  // Claude Code
+	".opencode/skills", // OpenCode
+	".cursor/skills",  // Cursor
+}
+
 // FindArtifacts finds all artifact files in a GitHub directory
 func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 	contents, err := c.ListGitHubContents(apiURL)
@@ -267,36 +277,63 @@ func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 
 		// Scan skills/ directory for skill subdirectories with SKILL.md
 		if item.Type == "dir" && item.Name == "skills" {
-			subURL := appendPath(apiURL, "skills")
-			subContents, err := c.ListGitHubContents(subURL)
-			if err == nil {
-				for _, sub := range subContents {
-					// Check for SKILL.md directly in skills/ (flat structure)
-					if sub.Type == "file" && strings.ToUpper(sub.Name) == "SKILL.MD" {
-						artifacts = append(artifacts, sub)
-						continue
-					}
-					// Check for skill subdirectories with SKILL.md
-					if sub.Type == "dir" {
-						skillURL := appendPath(subURL, sub.Name)
-						skillContents, err := c.ListGitHubContents(skillURL)
-						if err == nil {
-							for _, skillFile := range skillContents {
-								if skillFile.Type == "file" && strings.ToUpper(skillFile.Name) == "SKILL.MD" {
-									// Track the skill directory for fetching includes
-									skillFile.SkillDir = "skills/" + sub.Name
-									artifacts = append(artifacts, skillFile)
-								}
+			c.scanSkillsDir(apiURL, "skills", &artifacts)
+			continue
+		}
+
+		// Scan agent-specific directories (e.g., .agent, .github, .claude, etc.)
+		if item.Type == "dir" && strings.HasPrefix(item.Name, ".") {
+			for _, agentDir := range agentSkillDirs {
+				if strings.HasPrefix(agentDir, item.Name+"/") {
+					// This is an agent directory that might contain skills
+					// e.g., .agent -> .agent/skills, .github -> .github/skills
+					skillsSubdir := strings.TrimPrefix(agentDir, item.Name+"/")
+					agentURL := appendPath(apiURL, item.Name)
+					agentContents, err := c.ListGitHubContents(agentURL)
+					if err == nil {
+						for _, agentItem := range agentContents {
+							if agentItem.Type == "dir" && agentItem.Name == skillsSubdir {
+								c.scanSkillsDir(apiURL, agentDir, &artifacts)
 							}
 						}
 					}
 				}
 			}
-			continue
 		}
 	}
 
 	return artifacts, nil
+}
+
+// scanSkillsDir scans a skills directory for SKILL.md files
+func (c *Client) scanSkillsDir(apiURL string, skillsPath string, artifacts *[]GitHubContent) {
+	subURL := appendPath(apiURL, skillsPath)
+	subContents, err := c.ListGitHubContents(subURL)
+	if err != nil {
+		return
+	}
+
+	for _, sub := range subContents {
+		// Check for SKILL.md directly in skills/ (flat structure)
+		if sub.Type == "file" && strings.ToUpper(sub.Name) == "SKILL.MD" {
+			*artifacts = append(*artifacts, sub)
+			continue
+		}
+		// Check for skill subdirectories with SKILL.md
+		if sub.Type == "dir" {
+			skillURL := appendPath(subURL, sub.Name)
+			skillContents, err := c.ListGitHubContents(skillURL)
+			if err == nil {
+				for _, skillFile := range skillContents {
+					if skillFile.Type == "file" && strings.ToUpper(skillFile.Name) == "SKILL.MD" {
+						// Track the skill directory for fetching includes
+						skillFile.SkillDir = skillsPath + "/" + sub.Name
+						*artifacts = append(*artifacts, skillFile)
+					}
+				}
+			}
+		}
+	}
 }
 
 // FetchManifest tries to fetch and parse a tome.yaml manifest from a GitHub repo
