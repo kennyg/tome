@@ -203,16 +203,21 @@ func TestDetectArtifactType(t *testing.T) {
 }
 
 func TestIsArtifactFile(t *testing.T) {
+	// Note: IsArtifactFile now only returns true for SKILL.md files.
+	// Other artifacts (commands, agents, prompts) are discovered by
+	// FindArtifacts using directory-based rules, not this function.
 	tests := []struct {
 		filename string
 		want     bool
 	}{
-		// Artifacts
+		// Only SKILL.md is recognized as an artifact file
 		{"SKILL.md", true},
 		{"skill.md", true},
-		{"commit.md", true},
-		{"review-pr.md", true},
-		{"custom-command.md", true},
+
+		// Other .md files are NOT artifacts (directory-based discovery handles these)
+		{"commit.md", false},
+		{"review-pr.md", false},
+		{"custom-command.md", false},
 
 		// Non-artifacts (excluded files)
 		{"README.md", false},
