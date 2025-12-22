@@ -65,9 +65,13 @@ var (
 	cargoInstallRe = regexp.MustCompile(`cargo\s+install\s+([a-zA-Z0-9_-]+)`)
 
 	// Environment variable patterns
-	envVarRe      = regexp.MustCompile(`\$\{?([A-Z][A-Z0-9_]{2,})\}?`)
-	envExportRe   = regexp.MustCompile(`export\s+([A-Z][A-Z0-9_]+)=`)
-	apiKeyMention = regexp.MustCompile(`(?i)((?:[A-Z]+_)?API_KEY|(?:[A-Z]+_)?SECRET|(?:[A-Z]+_)?TOKEN)`)
+	envVarRe    = regexp.MustCompile(`\$\{?([A-Z][A-Z0-9_]{2,})\}?`)
+	envExportRe = regexp.MustCompile(`export\s+([A-Z][A-Z0-9_]+)=`)
+	// Match env var mentions only when they look like actual env vars:
+	// - Must be UPPER_CASE (not lowercase/mixed like "Secrets")
+	// - Must have word boundaries
+	// - Common patterns: OPENAI_API_KEY, MY_SECRET, AUTH_TOKEN
+	apiKeyMention = regexp.MustCompile(`\b([A-Z][A-Z0-9]*_(?:API_KEY|SECRET|TOKEN|KEY))\b`)
 
 	// Common env vars to ignore (too generic or system-level)
 	ignoredEnvVars = map[string]bool{
