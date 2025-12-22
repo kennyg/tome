@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/kennyg/tome/internal/artifact"
 	"github.com/kennyg/tome/internal/config"
+	"github.com/kennyg/tome/internal/detect"
 	"github.com/kennyg/tome/internal/fetch"
 	"github.com/kennyg/tome/internal/source"
 	"github.com/kennyg/tome/internal/ui"
@@ -131,8 +133,18 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 		fmt.Println()
 		// Single file
 		url := src.GitHubRawURL("")
-		learnSingleFile(client, url, filepath.Base(src.Path), src.String(), paths)
+		learnSingleFile(client, url, filepath.Base(src.Path), src.String(), paths, nil)
 		return
+	}
+
+	// Fetch README.md for requirement detection (try multiple names)
+	var readmeReqs []detect.Requirement
+	for _, readmeName := range []string{"README.md", "readme.md", "Readme.md"} {
+		readmeURL := src.GitHubRawURL(readmeName)
+		if content, err := client.FetchURL(readmeURL); err == nil {
+			readmeReqs = detect.FromContent(string(content))
+			break
+		}
 	}
 
 	// Try to list directory contents
@@ -186,7 +198,7 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 			exitWithError(parseErr.Error())
 		}
 		art.Source = src.String()
-		installArtifact(art, paths)
+		installArtifactWithExtraReqs(art, paths, readmeReqs)
 		return
 	}
 
@@ -194,16 +206,23 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 		// Check for SKILL.md specifically
 		skillURL := src.GitHubRawURL("SKILL.md")
 		content, err := client.FetchURL(skillURL)
-		if err != nil {
-			exitWithError("no artifacts found in repository")
+		if err == nil {
+			art, err := fetch.ParseSkill(content, skillURL)
+			if err == nil {
+				art.Source = src.String()
+				installArtifactWithExtraReqs(art, paths, readmeReqs)
+				return
+			}
 		}
-		art, err := fetch.ParseSkill(content, skillURL)
-		if err != nil {
-			exitWithError(err.Error())
+
+		// No artifacts found - check if this is an npm package
+		pkgURL := src.GitHubRawURL("package.json")
+		if pkgContent, err := client.FetchURL(pkgURL); err == nil {
+			showNpmPackageGuidance(pkgContent, src)
+			return
 		}
-		art.Source = src.String()
-		installArtifact(art, paths)
-		return
+
+		exitWithError("no artifacts found in repository")
 	}
 
 	fmt.Println(ui.Success.Render(fmt.Sprintf("  Found %d artifact(s)", len(artifacts))))
@@ -211,6 +230,7 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 
 	// Install each artifact
 	var installed []string
+	var allReqs []detect.Requirement
 	var skillContents []struct {
 		name    string
 		content string
@@ -264,8 +284,9 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 		}
 
 		art.Source = src.String()
-		installArtifactQuietWithIncludes(art, paths, includes)
+		reqs := installArtifactQuietWithExtras(art, paths, includes, readmeReqs)
 		installed = append(installed, art.Name)
+		allReqs = detect.Merge(allReqs, reqs)
 
 		// Track skill content for usage display
 		if art.Type == artifact.TypeSkill {
@@ -282,6 +303,12 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 	for _, name := range installed {
 		fmt.Println(ui.Muted.Render("    • " + name))
 	}
+
+	// Display detected requirements (from README + artifacts)
+	if len(allReqs) > 0 {
+		displayDetectedRequirements(src.String(), allReqs)
+	}
+
 	fmt.Println()
 	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
 
@@ -302,7 +329,7 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 	fmt.Println(ui.PageFooter())
 }
 
-func learnSingleFile(client *fetch.Client, url, filename, source string, paths *config.Paths) {
+func learnSingleFile(client *fetch.Client, url, filename, source string, paths *config.Paths, extraReqs []detect.Requirement) {
 	fmt.Println(ui.Muted.Render("  Fetching " + filename))
 
 	content, err := client.FetchURL(url)
@@ -316,7 +343,7 @@ func learnSingleFile(client *fetch.Client, url, filename, source string, paths *
 	}
 
 	art.Source = source
-	installArtifact(art, paths)
+	installArtifactWithExtraReqs(art, paths, extraReqs)
 }
 
 func parseArtifact(content []byte, filename, sourceURL string) (*artifact.Artifact, error) {
@@ -342,7 +369,7 @@ func learnFromURL(client *fetch.Client, src *source.Source, paths *config.Paths)
 	fmt.Println()
 
 	filename := filepath.Base(src.URL)
-	learnSingleFile(client, src.URL, filename, src.Original, paths)
+	learnSingleFile(client, src.URL, filename, src.Original, paths, nil)
 }
 
 func learnFromLocal(src *source.Source, paths *config.Paths) {
@@ -426,7 +453,11 @@ func learnFromLocal(src *source.Source, paths *config.Paths) {
 }
 
 func installArtifact(art *artifact.Artifact, paths *config.Paths) {
-	doInstall(art, paths)
+	installArtifactWithExtraReqs(art, paths, nil)
+}
+
+func installArtifactWithExtraReqs(art *artifact.Artifact, paths *config.Paths, extraReqs []detect.Requirement) {
+	reqs := doInstallWithExtraReqs(art, paths, nil, extraReqs)
 
 	// Success output
 	badge := getBadge(art.Type)
@@ -438,20 +469,25 @@ func installArtifact(art *artifact.Artifact, paths *config.Paths) {
 	fmt.Println()
 	fmt.Println(ui.SuccessLine("Inscribed successfully"))
 	fmt.Println(ui.Dim.Render("  " + getInstallPath(art, paths)))
+
+	// Display detected requirements
+	displayDetectedRequirements(art.Name, reqs)
+
 	fmt.Println()
 	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
 	fmt.Println(ui.PageFooter())
 }
 
 func installArtifactQuiet(art *artifact.Artifact, paths *config.Paths) {
-	doInstallWithIncludes(art, paths, nil)
-
-	badge := getBadge(art.Type)
-	fmt.Printf("  %s %s\n", badge, ui.Highlight.Render(art.Name))
+	installArtifactQuietWithExtras(art, paths, nil, nil)
 }
 
 func installArtifactQuietWithIncludes(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile) {
-	doInstallWithIncludes(art, paths, includes)
+	installArtifactQuietWithExtras(art, paths, includes, nil)
+}
+
+func installArtifactQuietWithExtras(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile, extraReqs []detect.Requirement) []detect.Requirement {
+	reqs := doInstallWithExtraReqs(art, paths, includes, extraReqs)
 
 	badge := getBadge(art.Type)
 	name := art.Name
@@ -459,13 +495,31 @@ func installArtifactQuietWithIncludes(art *artifact.Artifact, paths *config.Path
 		name = fmt.Sprintf("%s (+%d files)", art.Name, len(includes))
 	}
 	fmt.Printf("  %s %s\n", badge, ui.Highlight.Render(name))
+	return reqs
 }
 
-func doInstall(art *artifact.Artifact, paths *config.Paths) {
-	doInstallWithIncludes(art, paths, nil)
+func doInstall(art *artifact.Artifact, paths *config.Paths) []detect.Requirement {
+	return doInstallWithExtraReqs(art, paths, nil, nil)
 }
 
-func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile) {
+func doInstallWithExtraReqs(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile, extraReqs []detect.Requirement) []detect.Requirement {
+	reqs := doInstallWithIncludes(art, paths, includes)
+	// Merge extra requirements (e.g., from README)
+	if len(extraReqs) > 0 {
+		reqs = detect.Merge(reqs, extraReqs)
+		// Update the state with merged requirements
+		state, err := config.LoadState(paths.StateFile)
+		if err == nil {
+			if installed := state.FindInstalled(art.Name); installed != nil {
+				installed.Requirements = reqs
+				config.SaveState(paths.StateFile, state)
+			}
+		}
+	}
+	return reqs
+}
+
+func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile) []detect.Requirement {
 	installPath := getInstallPath(art, paths)
 	installDir := filepath.Dir(installPath)
 
@@ -479,12 +533,16 @@ func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes
 		exitWithError(fmt.Sprintf("failed to write file: %v", err))
 	}
 
+	// Collect include paths for requirement detection
+	var includePaths []string
+
 	// Write included files (for skills)
 	if art.Type == artifact.TypeSkill && len(includes) > 0 {
 		skillDir := filepath.Dir(installPath)
 		for _, inc := range includes {
 			incPath := filepath.Join(skillDir, inc.Path)
 			incDir := filepath.Dir(incPath)
+			includePaths = append(includePaths, inc.Path)
 
 			// Create subdirectory if needed
 			if err := os.MkdirAll(incDir, 0755); err != nil {
@@ -503,6 +561,11 @@ func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes
 		}
 	}
 
+	// Detect requirements from content and includes
+	contentReqs := detect.FromContent(art.Content)
+	includeReqs := detect.FromIncludes(includePaths)
+	allReqs := detect.Merge(contentReqs, includeReqs)
+
 	// Update state
 	state, err := config.LoadState(paths.StateFile)
 	if err != nil {
@@ -510,8 +573,9 @@ func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes
 	}
 
 	installed := artifact.InstalledArtifact{
-		Artifact:  *art,
-		LocalPath: installPath,
+		Artifact:     *art,
+		LocalPath:    installPath,
+		Requirements: allReqs,
 	}
 	installed.InstalledAt = time.Now()
 
@@ -526,6 +590,8 @@ func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes
 	if err := config.SaveState(paths.StateFile, state); err != nil {
 		exitWithError(fmt.Sprintf("failed to save state: %v", err))
 	}
+
+	return allReqs
 }
 
 func getInstallPath(art *artifact.Artifact, paths *config.Paths) string {
@@ -724,4 +790,97 @@ func isScript(path string, content []byte) bool {
 	}
 
 	return false
+}
+
+// displayDetectedRequirements shows any detected setup requirements after install
+func displayDetectedRequirements(name string, reqs []detect.Requirement) {
+	if len(reqs) == 0 {
+		return
+	}
+
+	fmt.Println()
+	fmt.Println(ui.Warning.Render("  ⚠ Detected setup requirements:"))
+
+	for _, req := range reqs {
+		var icon, label string
+		switch req.Type {
+		case detect.TypeNPM:
+			icon = "📦"
+			pm := req.PackageManager
+			if pm == "" {
+				pm = "npm"
+			}
+			label = fmt.Sprintf("%s: %s", pm, req.Value)
+		case detect.TypePip:
+			icon = "🐍"
+			pm := req.PackageManager
+			if pm == "" {
+				pm = "pip"
+			}
+			label = fmt.Sprintf("%s: %s", pm, req.Value)
+		case detect.TypeBrew:
+			icon = "🍺"
+			label = fmt.Sprintf("brew: %s", req.Value)
+		case detect.TypeCargo:
+			icon = "🦀"
+			label = fmt.Sprintf("cargo: %s", req.Value)
+		case detect.TypeEnv:
+			icon = "🔑"
+			label = fmt.Sprintf("env: %s", req.Value)
+		case detect.TypeRuntime:
+			icon = "⚙️"
+			label = fmt.Sprintf("runtime: %s", req.Value)
+		case detect.TypeCommand:
+			icon = "💻"
+			label = fmt.Sprintf("command: %s", req.Value)
+		default:
+			icon = "•"
+			label = req.Value
+		}
+
+		// Show source if from includes
+		source := ""
+		if strings.HasPrefix(req.Source, "include:") {
+			source = ui.Dim.Render(fmt.Sprintf(" (from %s)", strings.TrimPrefix(req.Source, "include:")))
+		} else if req.Line > 0 {
+			source = ui.Dim.Render(fmt.Sprintf(" (line %d)", req.Line))
+		}
+
+		fmt.Printf("    %s %s%s\n", icon, label, source)
+	}
+
+	fmt.Println()
+	fmt.Printf("  Run: %s\n", ui.Highlight.Render(fmt.Sprintf("tome doctor %s", name)))
+}
+
+// showNpmPackageGuidance displays helpful info when a repo is an npm package, not a tome collection
+func showNpmPackageGuidance(pkgContent []byte, src *source.Source) {
+	// Parse package.json to get package name
+	var pkg struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(pkgContent, &pkg); err != nil || pkg.Name == "" {
+		// Couldn't parse, use repo name as fallback
+		pkg.Name = src.Repo
+	}
+
+	fmt.Println()
+	fmt.Println(ui.Warning.Render("  This repository is an npm package, not a tome collection."))
+	fmt.Println()
+
+	if pkg.Description != "" {
+		fmt.Println(ui.Muted.Render("  " + ui.Truncate(pkg.Description, 60)))
+		fmt.Println()
+	}
+
+	fmt.Println(ui.Info.Render("  To install this package:"))
+	fmt.Println()
+	fmt.Printf("    %s\n", ui.Highlight.Render(fmt.Sprintf("bun add %s", pkg.Name)))
+	fmt.Println(ui.Muted.Render("    or"))
+	fmt.Printf("    %s\n", ui.Highlight.Render(fmt.Sprintf("npm install %s", pkg.Name)))
+	fmt.Println()
+	fmt.Println(ui.Dim.Render("  Tome is for skills, commands, and prompts (markdown artifacts)."))
+	fmt.Println(ui.Dim.Render("  Use your package manager for npm/bun packages."))
+	fmt.Println(ui.PageFooter())
 }

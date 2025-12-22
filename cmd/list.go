@@ -8,6 +8,7 @@ import (
 
 	"github.com/kennyg/tome/internal/artifact"
 	"github.com/kennyg/tome/internal/config"
+	"github.com/kennyg/tome/internal/detect"
 	"github.com/kennyg/tome/internal/ui"
 )
 
@@ -141,12 +142,25 @@ func runList(cmd *cobra.Command, args []string) {
 
 		descWidth := ui.DescriptionWidth() - 12 // account for location tag
 		for _, a := range artifacts {
+			// Check if setup is needed
+			needsSetup := false
+			if len(a.Requirements) > 0 && !a.SetupDone {
+				results := detect.VerifyAll(a.Requirements)
+				needsSetup = detect.HasUnsatisfied(results)
+			}
+
 			// Format location tag
 			var locTag string
 			if a.InEffect {
 				locTag = lipgloss.NewStyle().Foreground(ui.Green).Render(fmt.Sprintf("[%s]", a.Location))
 			} else {
 				locTag = lipgloss.NewStyle().Foreground(ui.DarkGray).Render(fmt.Sprintf("[%s]", a.Location))
+			}
+
+			// Format setup indicator
+			setupTag := ""
+			if needsSetup {
+				setupTag = " " + lipgloss.NewStyle().Foreground(ui.Amber).Render("[needs setup]")
 			}
 
 			// Format name (dim if not in effect)
@@ -165,7 +179,7 @@ func runList(cmd *cobra.Command, args []string) {
 				descStyled = lipgloss.NewStyle().Foreground(ui.DarkGray).Render(desc)
 			}
 
-			fmt.Printf("    %s %s\n", name, locTag)
+			fmt.Printf("    %s %s%s\n", name, locTag, setupTag)
 			fmt.Printf("    %s\n", descStyled)
 			fmt.Println()
 		}

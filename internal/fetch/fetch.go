@@ -180,7 +180,16 @@ var agentSkillDirs = []string{
 	".cursor/skills",  // Cursor
 }
 
-// FindArtifacts finds all artifact files in a GitHub directory
+// FindArtifacts finds all artifact files in a GitHub directory using strict rules.
+//
+// Strict artifact discovery rules:
+//   - Root level: Only SKILL.md is considered (not random .md files)
+//   - commands/ or command/: Any *.md file → command
+//   - skills/: SKILL.md files (flat or in subdirectories) → skill
+//   - agents/: Any *.md file → agent
+//   - prompts/: Any *.md file → prompt
+//   - hooks/: *.sh files or hooks.json → hook
+//   - Everything else: IGNORED (docs/, .github/workflows/, src/, etc.)
 func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 	contents, err := c.ListGitHubContents(apiURL)
 	if err != nil {
@@ -190,23 +199,15 @@ func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 	var artifacts []GitHubContent
 
 	for _, item := range contents {
-		// Direct artifact files at root
-		if item.Type == "file" && IsArtifactFile(item.Name) {
+		// Root level: Only SKILL.md is an artifact
+		if item.Type == "file" && strings.ToUpper(item.Name) == "SKILL.MD" {
 			artifacts = append(artifacts, item)
 			continue
 		}
 
-		// Scan commands/ directory for .md files
-		if item.Type == "dir" && item.Name == "commands" {
-			subURL := appendPath(apiURL, "commands")
-			subContents, err := c.ListGitHubContents(subURL)
-			if err == nil {
-				for _, sub := range subContents {
-					if sub.Type == "file" && strings.HasSuffix(strings.ToLower(sub.Name), ".md") {
-						artifacts = append(artifacts, sub)
-					}
-				}
-			}
+		// Scan commands/ or command/ directory for .md files
+		if item.Type == "dir" && (item.Name == "commands" || item.Name == "command") {
+			c.scanMarkdownDir(apiURL, item.Name, &artifacts)
 			continue
 		}
 
@@ -216,28 +217,92 @@ func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 			continue
 		}
 
-		// Scan agent-specific directories (e.g., .agent, .github, .claude, etc.)
+		// Scan agents/ directory for .md files
+		if item.Type == "dir" && item.Name == "agents" {
+			c.scanMarkdownDir(apiURL, "agents", &artifacts)
+			continue
+		}
+
+		// Scan prompts/ directory for .md files
+		if item.Type == "dir" && item.Name == "prompts" {
+			c.scanMarkdownDir(apiURL, "prompts", &artifacts)
+			continue
+		}
+
+		// Scan hooks/ directory for .sh files and hooks.json
+		if item.Type == "dir" && item.Name == "hooks" {
+			c.scanHooksDir(apiURL, "hooks", &artifacts)
+			continue
+		}
+
+		// Scan agent-specific directories (e.g., .claude, .opencode, etc.)
 		if item.Type == "dir" && strings.HasPrefix(item.Name, ".") {
-			for _, agentDir := range agentSkillDirs {
-				if strings.HasPrefix(agentDir, item.Name+"/") {
-					// This is an agent directory that might contain skills
-					// e.g., .agent -> .agent/skills, .github -> .github/skills
-					skillsSubdir := strings.TrimPrefix(agentDir, item.Name+"/")
-					agentURL := appendPath(apiURL, item.Name)
-					agentContents, err := c.ListGitHubContents(agentURL)
-					if err == nil {
-						for _, agentItem := range agentContents {
-							if agentItem.Type == "dir" && agentItem.Name == skillsSubdir {
-								c.scanSkillsDir(apiURL, agentDir, &artifacts)
-							}
-						}
-					}
-				}
-			}
+			c.scanAgentDir(apiURL, item.Name, &artifacts)
 		}
 	}
 
 	return artifacts, nil
+}
+
+// scanMarkdownDir scans a directory for .md files (commands, agents, prompts)
+func (c *Client) scanMarkdownDir(apiURL string, dirName string, artifacts *[]GitHubContent) {
+	subURL := appendPath(apiURL, dirName)
+	subContents, err := c.ListGitHubContents(subURL)
+	if err != nil {
+		return
+	}
+
+	for _, sub := range subContents {
+		if sub.Type == "file" && strings.HasSuffix(strings.ToLower(sub.Name), ".md") {
+			*artifacts = append(*artifacts, sub)
+		}
+	}
+}
+
+// scanHooksDir scans a hooks directory for .sh files and hooks.json
+func (c *Client) scanHooksDir(apiURL string, dirName string, artifacts *[]GitHubContent) {
+	subURL := appendPath(apiURL, dirName)
+	subContents, err := c.ListGitHubContents(subURL)
+	if err != nil {
+		return
+	}
+
+	for _, sub := range subContents {
+		if sub.Type == "file" {
+			lower := strings.ToLower(sub.Name)
+			if strings.HasSuffix(lower, ".sh") || lower == "hooks.json" {
+				*artifacts = append(*artifacts, sub)
+			}
+		}
+	}
+}
+
+// scanAgentDir scans agent-specific directories (.claude, .opencode, etc.)
+func (c *Client) scanAgentDir(apiURL string, agentDirName string, artifacts *[]GitHubContent) {
+	agentURL := appendPath(apiURL, agentDirName)
+	agentContents, err := c.ListGitHubContents(agentURL)
+	if err != nil {
+		return
+	}
+
+	for _, item := range agentContents {
+		if item.Type != "dir" {
+			continue
+		}
+
+		switch item.Name {
+		case "skills":
+			c.scanSkillsDir(apiURL, agentDirName+"/skills", artifacts)
+		case "commands", "command":
+			c.scanMarkdownDir(agentURL, item.Name, artifacts)
+		case "agents":
+			c.scanMarkdownDir(agentURL, "agents", artifacts)
+		case "prompts":
+			c.scanMarkdownDir(agentURL, "prompts", artifacts)
+		case "hooks":
+			c.scanHooksDir(agentURL, "hooks", artifacts)
+		}
+	}
 }
 
 // scanSkillsDir scans a skills directory for SKILL.md files
@@ -658,27 +723,13 @@ func DetectArtifactType(filename string) artifact.Type {
 }
 
 // IsArtifactFile checks if a filename is a potential artifact
+// IsArtifactFile returns true only for SKILL.md files at root level.
+// Other artifacts (commands, agents, prompts) are discovered via directory scanning,
+// not by checking individual files at root. This prevents random .md files
+// (docs, workflows, planning docs) from being treated as artifacts.
 func IsArtifactFile(filename string) bool {
-	lower := strings.ToLower(filename)
-	base := strings.ToLower(filepath.Base(filename))
-
-	// Skip common non-artifact files
-	if base == "readme.md" || base == "license.md" || base == "changelog.md" ||
-		base == "contributing.md" || base == "agents.md" || base == "claude.md" {
-		return false
-	}
-
-	// SKILL.md files
-	if base == "skill.md" {
-		return true
-	}
-
-	// Other markdown files (potential commands)
-	if strings.HasSuffix(lower, ".md") {
-		return true
-	}
-
-	return false
+	base := strings.ToUpper(filepath.Base(filename))
+	return base == "SKILL.MD"
 }
 
 // CommandNameFromFile extracts a command name from a filename

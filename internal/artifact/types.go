@@ -1,6 +1,10 @@
 package artifact
 
-import "time"
+import (
+	"time"
+
+	"github.com/kennyg/tome/internal/detect"
+)
 
 // Type represents the kind of artifact
 type Type string
@@ -84,8 +88,10 @@ type Manifest struct {
 // InstalledArtifact tracks what's been installed
 type InstalledArtifact struct {
 	Artifact
-	LocalPath string `json:"local_path"`
-	Hash      string `json:"hash,omitempty"` // For update detection
+	LocalPath    string                `json:"local_path"`
+	Hash         string                `json:"hash,omitempty"` // For update detection
+	Requirements []detect.Requirement  `json:"requirements,omitempty"` // Auto-detected setup requirements
+	SetupDone    bool                  `json:"setup_done,omitempty"`   // User confirmed setup complete
 }
 
 // PluginManifest represents .claude-plugin/plugin.json

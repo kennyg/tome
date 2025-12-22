@@ -87,7 +87,7 @@ func KnownAgents() []AgentConfig {
 			DisplayName: "OpenCode",
 			ConfigDir:   ".opencode",
 			SkillsDir:   "skills",
-			CommandsDir: "commands",
+			CommandsDir: "command", // Note: singular, not "commands"
 			Capabilities: AgentCapabilities{
 				Skills:   true,
 				Commands: true,
