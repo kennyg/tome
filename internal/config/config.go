@@ -5,9 +5,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/kennyg/tome/internal/artifact"
 )
+
+// lockTimeout is the maximum time to wait for a lock
+const lockTimeout = 5 * time.Second
+
+// lockRetryInterval is the time between lock attempts
+const lockRetryInterval = 50 * time.Millisecond
 
 // Following the dot-config specification: https://dot-config.github.io/
 // User config:    ~/.config/tome/ (or $XDG_CONFIG_HOME/tome/)
@@ -217,6 +224,61 @@ func (p *Paths) HasProjectConfig() bool {
 	return p.ProjectConfigDir != ""
 }
 
+// lockPath returns the lock file path for a given state file
+func lockPath(statePath string) string {
+	return statePath + ".lock"
+}
+
+// acquireLock attempts to acquire an exclusive lock on the state file.
+// Returns a cleanup function that must be called to release the lock.
+func acquireLock(statePath string) (unlock func(), err error) {
+	lockFile := lockPath(statePath)
+
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(lockFile), 0755); err != nil {
+		return nil, fmt.Errorf("failed to create lock directory: %w", err)
+	}
+
+	deadline := time.Now().Add(lockTimeout)
+	var f *os.File
+
+	for {
+		// Try to create lock file exclusively
+		f, err = os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if err == nil {
+			// Got the lock
+			break
+		}
+
+		if !os.IsExist(err) {
+			return nil, fmt.Errorf("failed to create lock file: %w", err)
+		}
+
+		// Lock file exists - check if it's stale (older than lockTimeout)
+		if info, statErr := os.Stat(lockFile); statErr == nil {
+			if time.Since(info.ModTime()) > lockTimeout {
+				// Stale lock, remove it
+				os.Remove(lockFile)
+				continue
+			}
+		}
+
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("timeout waiting for state file lock")
+		}
+
+		time.Sleep(lockRetryInterval)
+	}
+
+	// Write PID to lock file for debugging
+	fmt.Fprintf(f, "%d", os.Getpid())
+	f.Close()
+
+	return func() {
+		os.Remove(lockFile)
+	}, nil
+}
+
 // LoadState loads the current state from disk
 func LoadState(path string) (*State, error) {
 	data, err := os.ReadFile(path)
@@ -235,14 +297,60 @@ func LoadState(path string) (*State, error) {
 	return &state, nil
 }
 
-// SaveState saves the current state to disk
+// SaveState saves the current state to disk with file locking and atomic writes
 func SaveState(path string, state *State) error {
+	// Acquire lock
+	unlock, err := acquireLock(path)
+	if err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	defer unlock()
+
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	// Atomic write: write to temp file, then rename
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp(dir, ".state-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	// Clean up temp file on error
+	defer func() {
+		if tmpPath != "" {
+			os.Remove(tmpPath)
+		}
+	}()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	tmpPath = "" // Prevent cleanup since rename succeeded
+	return nil
 }
 
 // AddInstalled adds an artifact to the installed list
