@@ -434,6 +434,9 @@ func ProgressDots(count int) string {
 
 // StatusLine creates a status line with icon and message
 func StatusLine(icon, message string, color lipgloss.Color) string {
+	if !IsTTY {
+		return fmt.Sprintf("  %s %s", icon, message)
+	}
 	iconStyled := lipgloss.NewStyle().Foreground(color).Render(icon)
 	msgStyled := lipgloss.NewStyle().Foreground(color).Render(message)
 	return fmt.Sprintf("  %s %s", iconStyled, msgStyled)
@@ -441,21 +444,33 @@ func StatusLine(icon, message string, color lipgloss.Color) string {
 
 // SuccessLine creates a success status line
 func SuccessLine(message string) string {
+	if !IsTTY {
+		return fmt.Sprintf("  OK: %s", message)
+	}
 	return StatusLine("✓", message, Green)
 }
 
 // ErrorLine creates an error status line
 func ErrorLine(message string) string {
+	if !IsTTY {
+		return fmt.Sprintf("  ERROR: %s", message)
+	}
 	return StatusLine("✗", message, Pink)
 }
 
 // WarningLine creates a warning status line
 func WarningLine(message string) string {
+	if !IsTTY {
+		return fmt.Sprintf("  WARN: %s", message)
+	}
 	return StatusLine("!", message, Copper)
 }
 
 // InfoLine creates an info status line
 func InfoLine(message string) string {
+	if !IsTTY {
+		return fmt.Sprintf("  %s", message)
+	}
 	return StatusLine("→", message, Blue)
 }
 
@@ -465,6 +480,10 @@ func InfoLine(message string) string {
 
 // EmptyTome returns a friendly empty state
 func EmptyTome() string {
+	if !IsTTY {
+		return "\n  (empty)\n\n  Your tome awaits its first inscription...\n  Use `tome learn <source>` to begin.\n"
+	}
+
 	book := lipgloss.NewStyle().Foreground(DarkGray).Render(`
       ┌─────────────┐
       │             │
@@ -480,6 +499,10 @@ func EmptyTome() string {
 
 // NoResults returns a friendly no-results state
 func NoResults(query string) string {
+	if !IsTTY {
+		return fmt.Sprintf("\n  No artifacts found for \"%s\"\n  Try broader search terms\n", query)
+	}
+
 	crystal := lipgloss.NewStyle().Foreground(DarkGray).Render("🔮")
 	message := lipgloss.NewStyle().Foreground(Gray).Render(fmt.Sprintf("No artifacts found for \"%s\"", query))
 	hint := lipgloss.NewStyle().Foreground(Cyan).Render("Try broader search terms")
@@ -502,6 +525,52 @@ func Truncate(text string, max int) string {
 		return text
 	}
 	return text[:max-3] + "..."
+}
+
+// Render applies a lipgloss style to text, returning plain text in non-TTY environments.
+// Use this wrapper when you want TTY-aware styling.
+func Render(style lipgloss.Style, text string) string {
+	if !IsTTY {
+		return text
+	}
+	return style.Render(text)
+}
+
+// Convenience functions for TTY-aware rendering of common styles
+
+// RenderMuted renders text in muted style (TTY-aware)
+func RenderMuted(text string) string {
+	return Render(Muted, text)
+}
+
+// RenderDim renders text in dim style (TTY-aware)
+func RenderDim(text string) string {
+	return Render(Dim, text)
+}
+
+// RenderHighlight renders text in highlight style (TTY-aware)
+func RenderHighlight(text string) string {
+	return Render(Highlight, text)
+}
+
+// RenderSuccess renders text in success style (TTY-aware)
+func RenderSuccess(text string) string {
+	return Render(Success, text)
+}
+
+// RenderError renders text in error style (TTY-aware)
+func RenderError(text string) string {
+	return Render(Error, text)
+}
+
+// RenderWarning renders text in warning style (TTY-aware)
+func RenderWarning(text string) string {
+	return Render(Warning, text)
+}
+
+// RenderInfo renders text in info style (TTY-aware)
+func RenderInfo(text string) string {
+	return Render(Info, text)
 }
 
 // TerminalWidth returns the current terminal width, defaulting to 80 if unknown
