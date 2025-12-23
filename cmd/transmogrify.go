@@ -18,13 +18,18 @@ var transmogrifyCmd = &cobra.Command{
 	Use:     "transmogrify <source>",
 	Aliases: []string{"convert", "morph", "xform"},
 	Short:   "Convert artifacts between agent formats",
-	Long: `Convert skill artifacts between different AI agent formats.
+	Long: `Convert skill artifacts and MCP configs between different AI agent formats.
 
 Supports conversion between:
-  - Claude Code (skills/*/SKILL.md)
-  - OpenCode (.opencode/skill/*/SKILL.md)
+  - Claude Code (skills/*/SKILL.md, .mcp.json)
+  - OpenCode (.opencode/skill/*/SKILL.md, opencode.json)
   - GitHub Copilot (agents/*.agent.md)
-  - Cursor (.cursor/rules/*.md)
+  - Cursor (.cursor/rules/*.md, .cursor/mcp.json)
+
+Artifact types:
+  - Skills (SKILL.md, .agent.md, .md rules)
+  - Commands (.prompt.md, commands/*.md)
+  - MCP configs (.mcp.json, mcp.json, opencode.json)
 
 Sources can be:
   - Local file path
@@ -34,7 +39,9 @@ Sources can be:
 Examples:
   tome transmogrify agents/CSharp.agent.md --to claude
   tome transmogrify ./copilot-skills/ --to claude --output ./converted/
-  tome transmogrify github/awesome-copilot --to claude --dry-run`,
+  tome transmogrify github/awesome-copilot --to claude --dry-run
+  tome transmogrify .mcp.json --to opencode
+  tome transmogrify opencode.json --to claude`,
 	Args: cobra.ExactArgs(1),
 	Run:  runTransmogrify,
 }
@@ -115,6 +122,12 @@ func transmogrifyFile(path string, targetFormat schema.Format) {
 		exitWithError(fmt.Sprintf("failed to read file: %v", err))
 	}
 
+	// Check if this is an MCP config file
+	if schema.IsMCPFile(path) {
+		transmogrifyMCPFile(path, content, targetFormat)
+		return
+	}
+
 	// Parse (auto-detect format)
 	skill, err := schema.ParseAuto(content, path)
 	if err != nil {
@@ -182,13 +195,91 @@ func transmogrifyFile(path string, targetFormat schema.Format) {
 	fmt.Println(ui.PageFooter())
 }
 
+func transmogrifyMCPFile(path string, content []byte, targetFormat schema.Format) {
+	// Parse MCP config (auto-detect format)
+	config, err := schema.ParseMCPAuto(content, path)
+	if err != nil {
+		exitWithError(fmt.Sprintf("failed to parse MCP config: %v", err))
+	}
+
+	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Type: MCP configuration")))
+	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Detected format: %s", config.GetFormat())))
+	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Servers: %d", len(config.Servers))))
+	fmt.Println()
+
+	// List servers
+	for _, name := range config.ServerNames() {
+		server := config.Servers[name]
+		desc := server.Command
+		if desc == "" && server.URL != "" {
+			desc = server.URL
+		}
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    • %s (%s)", name, desc)))
+	}
+	fmt.Println()
+
+	// Convert
+	result, err := schema.ConvertMCPWithInfo(config, targetFormat)
+	if err != nil {
+		exitWithError(fmt.Sprintf("conversion failed: %v", err))
+	}
+
+	// Show warnings
+	for _, w := range result.Warnings {
+		fmt.Println(ui.WarningLine(w))
+	}
+
+	if transmogrifyDryRun {
+		fmt.Println(ui.Muted.Render("  [dry-run] Would convert:"))
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s → %s (%d servers)", result.SourceFormat, result.TargetFormat, result.ServerCount)))
+		fmt.Println()
+		fmt.Println(ui.SuccessLine("Dry run complete"))
+		fmt.Println(ui.PageFooter())
+		return
+	}
+
+	// Output
+	if transmogrifyOutput == "" {
+		// Print to stdout
+		fmt.Println(ui.Muted.Render("  Output:"))
+		fmt.Println()
+		fmt.Println(string(result.Content))
+	} else {
+		// Write to file
+		outDir := filepath.Join(transmogrifyOutput, schema.MCPOutputDirectory(targetFormat))
+		if outDir != transmogrifyOutput {
+			if err := os.MkdirAll(outDir, 0755); err != nil {
+				exitWithError(fmt.Sprintf("failed to create output directory: %v", err))
+			}
+		}
+
+		outPath := filepath.Join(outDir, schema.MCPOutputFilename(targetFormat))
+
+		// Check if exists
+		if !transmogrifyForce {
+			if _, err := os.Stat(outPath); err == nil {
+				exitWithError(fmt.Sprintf("output file exists: %s (use --force to overwrite)", outPath))
+			}
+		}
+
+		if err := os.WriteFile(outPath, result.Content, 0644); err != nil {
+			exitWithError(fmt.Sprintf("failed to write file: %v", err))
+		}
+
+		fmt.Println(ui.SuccessLine(fmt.Sprintf("Wrote %s", outPath)))
+	}
+
+	fmt.Println(ui.PageFooter())
+}
+
 func transmogrifyDirectory(path string, targetFormat schema.Format) {
 	fmt.Println(ui.InfoLine(fmt.Sprintf("Source: %s/", path)))
 	fmt.Println(ui.InfoLine(fmt.Sprintf("Target: %s", targetFormat)))
 	fmt.Println()
 
-	// Find all potential skill files
-	var files []string
+	// Find all potential skill files and MCP configs
+	var skillFiles []string
+	var mcpFiles []string
 	err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -198,10 +289,12 @@ func transmogrifyDirectory(path string, targetFormat schema.Format) {
 		}
 		// Check for known patterns
 		base := filepath.Base(p)
-		if strings.EqualFold(base, "SKILL.md") ||
+		if schema.IsMCPFile(p) {
+			mcpFiles = append(mcpFiles, p)
+		} else if strings.EqualFold(base, "SKILL.md") ||
 			strings.HasSuffix(base, ".agent.md") ||
 			strings.HasSuffix(base, ".prompt.md") {
-			files = append(files, p)
+			skillFiles = append(skillFiles, p)
 		}
 		return nil
 	})
@@ -209,13 +302,14 @@ func transmogrifyDirectory(path string, targetFormat schema.Format) {
 		exitWithError(fmt.Sprintf("failed to scan directory: %v", err))
 	}
 
+	files := append(skillFiles, mcpFiles...)
 	if len(files) == 0 {
 		fmt.Println(ui.WarningLine("No convertible files found"))
 		fmt.Println(ui.PageFooter())
 		return
 	}
 
-	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Found %d file(s)", len(files))))
+	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Found %d file(s) (%d skills, %d MCP configs)", len(files), len(skillFiles), len(mcpFiles))))
 	fmt.Println()
 
 	var converted, failed int
@@ -227,6 +321,68 @@ func transmogrifyDirectory(path string, targetFormat schema.Format) {
 			continue
 		}
 
+		relPath, _ := filepath.Rel(path, file)
+
+		// Handle MCP files separately
+		if schema.IsMCPFile(file) {
+			mcpConfig, err := schema.ParseMCPAuto(content, file)
+			if err != nil {
+				fmt.Println(ui.Warning.Render(fmt.Sprintf("  ! %s: %v", filepath.Base(file), err)))
+				failed++
+				continue
+			}
+
+			mcpResult, err := schema.ConvertMCPWithInfo(mcpConfig, targetFormat)
+			if err != nil {
+				fmt.Println(ui.Warning.Render(fmt.Sprintf("  ! %s: %v", filepath.Base(file), err)))
+				failed++
+				continue
+			}
+
+			outFilename := schema.MCPOutputFilename(targetFormat)
+
+			if transmogrifyDryRun {
+				fmt.Printf("  %s %s → %s (%d servers)\n",
+					ui.Success.Render("✓"),
+					relPath,
+					outFilename,
+					mcpResult.ServerCount)
+				converted++
+				continue
+			}
+
+			if transmogrifyOutput != "" {
+				outDir := filepath.Join(transmogrifyOutput, schema.MCPOutputDirectory(targetFormat))
+				if outDir != transmogrifyOutput && outDir != "" {
+					if err := os.MkdirAll(outDir, 0755); err != nil {
+						fmt.Println(ui.Warning.Render(fmt.Sprintf("  ! %s: %v", filepath.Base(file), err)))
+						failed++
+						continue
+					}
+				}
+				if outDir == "" {
+					outDir = transmogrifyOutput
+				}
+
+				outPath := filepath.Join(outDir, outFilename)
+				if err := os.WriteFile(outPath, mcpResult.Content, 0644); err != nil {
+					fmt.Println(ui.Warning.Render(fmt.Sprintf("  ! %s: %v", filepath.Base(file), err)))
+					failed++
+					continue
+				}
+
+				fmt.Printf("  %s %s → %s\n",
+					ui.Success.Render("✓"),
+					relPath,
+					outPath)
+			} else {
+				fmt.Printf("  %s %s (%d servers)\n", ui.Success.Render("✓"), relPath, mcpResult.ServerCount)
+			}
+			converted++
+			continue
+		}
+
+		// Handle skill files
 		skill, err := schema.ParseAuto(content, file)
 		if err != nil {
 			fmt.Println(ui.Warning.Render(fmt.Sprintf("  ! %s: %v", filepath.Base(file), err)))
@@ -240,8 +396,6 @@ func transmogrifyDirectory(path string, targetFormat schema.Format) {
 			failed++
 			continue
 		}
-
-		relPath, _ := filepath.Rel(path, file)
 
 		if transmogrifyDryRun {
 			fmt.Printf("  %s %s → %s\n",
