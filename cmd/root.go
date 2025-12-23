@@ -12,6 +12,9 @@ import (
 var (
 	// Version is set at build time
 	Version = "dev"
+
+	// plainOutput forces plain text output without colors/decorations
+	plainOutput bool
 )
 
 var rootCmd = &cobra.Command{
@@ -21,6 +24,11 @@ var rootCmd = &cobra.Command{
 
   Your spellbook for AI agent capabilities.
   Discover, install, and manage skills, commands, and prompts.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if plainOutput {
+			ui.IsTTY = false
+		}
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	},
@@ -32,6 +40,10 @@ func Execute() error {
 }
 
 func init() {
+	// Global flags
+	rootCmd.PersistentFlags().BoolVar(&plainOutput, "plain", false, "Force plain text output (no colors/decorations)")
+
+	// Subcommands
 	rootCmd.AddCommand(aproposCmd)
 	rootCmd.AddCommand(attuneCmd)
 	rootCmd.AddCommand(doctorCmd)
