@@ -291,7 +291,7 @@ func getOrBuildIndexQuiet(skillsDirs []string, primaryDir string, forceRebuild b
 
 func printSkillResult(skill apropos.Skill) {
 	name := lipgloss.NewStyle().Foreground(ui.White).Bold(true).Render(skill.Name)
-	fmt.Printf("  %s  %s\n", ui.SkillBadge, name)
+	fmt.Printf("  %s  %s\n", ui.SkillBadge(), name)
 
 	// Truncate description for display
 	desc := skill.Description

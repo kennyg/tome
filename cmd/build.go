@@ -220,10 +220,10 @@ func runBuild(cmd *cobra.Command, args []string) {
 
 		fmt.Println(ui.Muted.Render("  Artifacts found:"))
 		if commands > 0 {
-			fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s %d command(s)", ui.CmdBadge, commands)))
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s %d command(s)", ui.CmdBadge(), commands)))
 		}
 		if skills > 0 {
-			fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s %d skill(s)", ui.SkillBadge, skills)))
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s %d skill(s)", ui.SkillBadge(), skills)))
 		}
 		fmt.Println()
 

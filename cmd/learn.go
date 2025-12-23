@@ -701,7 +701,7 @@ func getInstallPath(art *artifact.Artifact, paths *config.Paths) string {
 
 // learnPlugin handles installing a plugin and all its artifacts
 func learnPlugin(client *fetch.Client, src *source.Source, apiURL string, paths *config.Paths) {
-	fmt.Println(ui.PluginBadge + "  " + ui.Info.Render("Plugin detected"))
+	fmt.Println(ui.PluginBadge() + "  " + ui.Info.Render("Plugin detected"))
 	fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s/%s", src.Owner, src.Repo)))
 	fmt.Println()
 
@@ -776,7 +776,7 @@ func learnPlugin(client *fetch.Client, src *source.Source, apiURL string, paths 
 				for _, hook := range plugin.Hooks {
 					hookPath := filepath.Join(hooksDir, hook.Filename)
 					if err := os.WriteFile(hookPath, []byte(hook.Content), 0755); err == nil {
-						fmt.Printf("  %s %s\n", ui.HookBadge, ui.Highlight.Render(hook.Name))
+						fmt.Printf("  %s %s\n", ui.HookBadge(), ui.Highlight.Render(hook.Name))
 						installed = append(installed, hook.Name)
 					}
 				}

@@ -213,17 +213,17 @@ func runList(cmd *cobra.Command, args []string) {
 func getBadge(t artifact.Type) string {
 	switch t {
 	case artifact.TypeSkill:
-		return ui.SkillBadge
+		return ui.SkillBadge()
 	case artifact.TypeCommand:
-		return ui.CmdBadge
+		return ui.CmdBadge()
 	case artifact.TypePrompt:
-		return ui.PromptBadge
+		return ui.PromptBadge()
 	case artifact.TypeHook:
-		return ui.HookBadge
+		return ui.HookBadge()
 	case artifact.TypeAgent:
-		return ui.AgentBadge
+		return ui.AgentBadge()
 	case artifact.TypePlugin:
-		return ui.PluginBadge
+		return ui.PluginBadge()
 	default:
 		return ""
 	}

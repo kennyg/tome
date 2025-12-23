@@ -74,7 +74,7 @@ func runSearch(cmd *cobra.Command, args []string) {
 	for _, repo := range repos {
 		name := lipgloss.NewStyle().Foreground(ui.White).Bold(true).Render(repo)
 		cmdText := lipgloss.NewStyle().Foreground(ui.Cyan).Render("tome learn " + repo)
-		fmt.Printf("  %s  %s\n", ui.SkillBadge, name)
+		fmt.Printf("  %s  %s\n", ui.SkillBadge(), name)
 		fmt.Printf("       %s\n", cmdText)
 		fmt.Println()
 	}

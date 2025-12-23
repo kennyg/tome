@@ -144,26 +144,101 @@ var (
 // BADGES - Type indicators with flair
 // ═══════════════════════════════════════════════════════════════════════════════
 
-var (
-	baseBadge = lipgloss.NewStyle().
-		Padding(0, 1).
-		Bold(true)
+var baseBadge = lipgloss.NewStyle().
+	Padding(0, 1).
+	Bold(true)
 
-	// Artifact type badges
-	SkillBadge  = baseBadge.Background(Purple).Foreground(White).Render("✦ SKILL")
-	CmdBadge    = baseBadge.Background(Blue).Foreground(White).Render("⌘ CMD")
-	PromptBadge = baseBadge.Background(Emerald).Foreground(White).Render("✎ PROMPT")
-	HookBadge   = baseBadge.Background(Copper).Foreground(White).Render("⚡ HOOK")
-	AgentBadge  = baseBadge.Background(Magenta).Foreground(White).Render("◈ AGENT")
-	PluginBadge = baseBadge.Background(Gold).Foreground(Black).Render("⬡ PLUGIN")
+// Artifact type badge functions
 
-	// Status badges
-	StatusOK     = baseBadge.Background(Green).Foreground(White).Render("✓")
-	StatusWarn   = baseBadge.Background(Copper).Foreground(White).Render("!")
-	StatusError  = baseBadge.Background(Pink).Foreground(White).Render("✗")
-	StatusNew    = baseBadge.Background(Cyan).Foreground(White).Render("NEW")
-	StatusUpdate = baseBadge.Background(Gold).Foreground(Black).Render("UPD")
-)
+// SkillBadge returns the skill type badge
+func SkillBadge() string {
+	if !IsTTY {
+		return "[SKILL]"
+	}
+	return baseBadge.Background(Purple).Foreground(White).Render("✦ SKILL")
+}
+
+// CmdBadge returns the command type badge
+func CmdBadge() string {
+	if !IsTTY {
+		return "[CMD]"
+	}
+	return baseBadge.Background(Blue).Foreground(White).Render("⌘ CMD")
+}
+
+// PromptBadge returns the prompt type badge
+func PromptBadge() string {
+	if !IsTTY {
+		return "[PROMPT]"
+	}
+	return baseBadge.Background(Emerald).Foreground(White).Render("✎ PROMPT")
+}
+
+// HookBadge returns the hook type badge
+func HookBadge() string {
+	if !IsTTY {
+		return "[HOOK]"
+	}
+	return baseBadge.Background(Copper).Foreground(White).Render("⚡ HOOK")
+}
+
+// AgentBadge returns the agent type badge
+func AgentBadge() string {
+	if !IsTTY {
+		return "[AGENT]"
+	}
+	return baseBadge.Background(Magenta).Foreground(White).Render("◈ AGENT")
+}
+
+// PluginBadge returns the plugin type badge
+func PluginBadge() string {
+	if !IsTTY {
+		return "[PLUGIN]"
+	}
+	return baseBadge.Background(Gold).Foreground(Black).Render("⬡ PLUGIN")
+}
+
+// Status badge functions
+
+// StatusOK returns the success status badge
+func StatusOK() string {
+	if !IsTTY {
+		return "[OK]"
+	}
+	return baseBadge.Background(Green).Foreground(White).Render("✓")
+}
+
+// StatusWarn returns the warning status badge
+func StatusWarn() string {
+	if !IsTTY {
+		return "[!]"
+	}
+	return baseBadge.Background(Copper).Foreground(White).Render("!")
+}
+
+// StatusError returns the error status badge
+func StatusError() string {
+	if !IsTTY {
+		return "[ERR]"
+	}
+	return baseBadge.Background(Pink).Foreground(White).Render("✗")
+}
+
+// StatusNew returns the new status badge
+func StatusNew() string {
+	if !IsTTY {
+		return "[NEW]"
+	}
+	return baseBadge.Background(Cyan).Foreground(White).Render("NEW")
+}
+
+// StatusUpdate returns the update status badge
+func StatusUpdate() string {
+	if !IsTTY {
+		return "[UPD]"
+	}
+	return baseBadge.Background(Gold).Foreground(Black).Render("UPD")
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGO - The centerpiece
