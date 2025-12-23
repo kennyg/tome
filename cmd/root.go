@@ -18,8 +18,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "tome",
-	Short: "AI Agent Skill Manager",
+	Use:     "tome",
+	Short:   "AI Agent Skill Manager",
+	Version: Version,
 	Long: ui.Logo() + `
 
   Your spellbook for AI agent capabilities.
