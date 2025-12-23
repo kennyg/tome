@@ -72,6 +72,32 @@ type CursorMCPConfig = ClaudeMCPConfig
 // CursorMCPServer is identical to Claude's format
 type CursorMCPServer = ClaudeMCPServer
 
+// CopilotMCPConfig represents VS Code/GitHub Copilot's MCP configuration format
+// Used in .vscode/mcp.json
+type CopilotMCPConfig struct {
+	Servers map[string]*CopilotMCPServer `json:"servers,omitempty"`
+	Inputs  []CopilotMCPInput            `json:"inputs,omitempty"`
+}
+
+// CopilotMCPServer represents a server in VS Code/Copilot's format
+type CopilotMCPServer struct {
+	Command string            `json:"command,omitempty"`
+	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	EnvFile string            `json:"envFile,omitempty"` // Path to env file
+	Type    string            `json:"type,omitempty"`    // "stdio", "http", "sse"
+	URL     string            `json:"url,omitempty"`     // For http/sse types
+	Headers map[string]string `json:"headers,omitempty"` // For http/sse types
+}
+
+// CopilotMCPInput represents an input placeholder for secrets
+type CopilotMCPInput struct {
+	ID          string `json:"id"`
+	Type        string `json:"type,omitempty"`        // "promptString"
+	Description string `json:"description,omitempty"`
+	Password    bool   `json:"password,omitempty"`
+}
+
 // OpenCodeMCPConfig represents OpenCode's MCP configuration format
 // Used in ~/.config/opencode/opencode.json, opencode.json
 type OpenCodeMCPConfig struct {
@@ -161,11 +187,40 @@ func ParseOpenCodeMCP(content []byte) (*MCPConfig, error) {
 	return config, nil
 }
 
+// ParseCopilotMCP parses VS Code/GitHub Copilot MCP configuration
+func ParseCopilotMCP(content []byte) (*MCPConfig, error) {
+	var cfg CopilotMCPConfig
+	if err := json.Unmarshal(content, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse Copilot MCP config: %w", err)
+	}
+
+	config := &MCPConfig{
+		Servers:      make(map[string]*MCPServer),
+		sourceFormat: FormatCopilot,
+	}
+
+	for name, server := range cfg.Servers {
+		config.Servers[name] = &MCPServer{
+			Name:    name,
+			Command: server.Command,
+			Args:    server.Args,
+			Env:     server.Env,
+			Type:    server.Type,
+			URL:     server.URL,
+			Headers: server.Headers,
+		}
+	}
+
+	return config, nil
+}
+
 // ParseMCP parses MCP configuration based on format
 func ParseMCP(content []byte, format Format) (*MCPConfig, error) {
 	switch format {
 	case FormatClaude:
 		return ParseClaudeMCP(content)
+	case FormatCopilot:
+		return ParseCopilotMCP(content)
 	case FormatCursor:
 		return ParseCursorMCP(content)
 	case FormatOpenCode:
@@ -184,6 +239,8 @@ func ParseMCPAuto(content []byte, filename string) (*MCPConfig, error) {
 // DetectMCPFormat detects the format from filename
 func DetectMCPFormat(filename string) Format {
 	switch {
+	case contains(filename, ".vscode"):
+		return FormatCopilot
 	case contains(filename, ".cursor"):
 		return FormatCursor
 	case contains(filename, "opencode"):
@@ -258,6 +315,34 @@ func SerializeOpenCodeMCP(config *MCPConfig) ([]byte, error) {
 	return json.MarshalIndent(cfg, "", "  ")
 }
 
+// SerializeCopilotMCP serializes to VS Code/Copilot format
+func SerializeCopilotMCP(config *MCPConfig) ([]byte, error) {
+	cfg := CopilotMCPConfig{
+		Servers: make(map[string]*CopilotMCPServer),
+	}
+
+	for name, server := range config.Servers {
+		srv := &CopilotMCPServer{
+			Command: server.Command,
+			Args:    server.Args,
+			Env:     server.Env,
+			URL:     server.URL,
+			Headers: server.Headers,
+		}
+		// Set type for remote servers
+		if server.URL != "" {
+			if server.Type == "sse" {
+				srv.Type = "sse"
+			} else {
+				srv.Type = "http"
+			}
+		}
+		cfg.Servers[name] = srv
+	}
+
+	return json.MarshalIndent(cfg, "", "  ")
+}
+
 // SerializeMCP serializes to the specified format
 func SerializeMCP(config *MCPConfig, format Format) ([]byte, error) {
 	switch format {
@@ -265,6 +350,8 @@ func SerializeMCP(config *MCPConfig, format Format) ([]byte, error) {
 		return SerializeClaudeMCP(config)
 	case FormatCursor:
 		return SerializeCursorMCP(config)
+	case FormatCopilot:
+		return SerializeCopilotMCP(config)
 	case FormatOpenCode:
 		return SerializeOpenCodeMCP(config)
 	default:
@@ -303,15 +390,17 @@ func ConvertMCPWithInfo(config *MCPConfig, targetFormat Format) (*MCPConversionR
 	// Check for potential data loss
 	for name, server := range config.Servers {
 		// OpenCode-specific fields
-		if targetFormat != FormatOpenCode {
+		if targetFormat != FormatOpenCode && targetFormat != FormatCopilot {
 			if server.URL != "" {
 				result.Warnings = append(result.Warnings,
-					fmt.Sprintf("server %q: remote URL is OpenCode-specific (will be omitted)", name))
+					fmt.Sprintf("server %q: remote URL not supported in %s (will be omitted)", name, targetFormat))
 			}
 			if server.Headers != nil && len(server.Headers) > 0 {
 				result.Warnings = append(result.Warnings,
-					fmt.Sprintf("server %q: headers are OpenCode-specific (will be omitted)", name))
+					fmt.Sprintf("server %q: headers not supported in %s (will be omitted)", name, targetFormat))
 			}
+		}
+		if targetFormat != FormatOpenCode {
 			if server.Enabled != nil {
 				result.Warnings = append(result.Warnings,
 					fmt.Sprintf("server %q: enabled field is OpenCode-specific (will be omitted)", name))
@@ -319,7 +408,7 @@ func ConvertMCPWithInfo(config *MCPConfig, targetFormat Format) (*MCPConversionR
 		}
 
 		// Claude-specific fields
-		if targetFormat == FormatOpenCode {
+		if targetFormat == FormatOpenCode || targetFormat == FormatCopilot {
 			if server.Disabled {
 				result.Warnings = append(result.Warnings,
 					fmt.Sprintf("server %q: disabled field is Claude-specific (will be omitted)", name))
@@ -341,6 +430,8 @@ func MCPOutputFilename(targetFormat Format) string {
 		return ".mcp.json"
 	case FormatCursor:
 		return "mcp.json"
+	case FormatCopilot:
+		return "mcp.json"
 	case FormatOpenCode:
 		return "opencode.json"
 	default:
@@ -355,6 +446,8 @@ func MCPOutputDirectory(targetFormat Format) string {
 		return "" // .mcp.json goes in project root
 	case FormatCursor:
 		return ".cursor"
+	case FormatCopilot:
+		return ".vscode"
 	case FormatOpenCode:
 		return "" // opencode.json goes in project root
 	default:
@@ -368,6 +461,8 @@ func IsMCPFile(filename string) bool {
 	case hasBasename(filename, ".mcp.json"):
 		return true
 	case hasBasename(filename, "mcp.json") && contains(filename, ".cursor"):
+		return true
+	case hasBasename(filename, "mcp.json") && contains(filename, ".vscode"):
 		return true
 	case hasBasename(filename, "opencode.json"):
 		return true

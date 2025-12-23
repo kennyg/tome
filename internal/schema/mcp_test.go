@@ -360,6 +360,8 @@ func TestDetectMCPFormat(t *testing.T) {
 		{".claude/settings.local.json", FormatClaude},
 		{".cursor/mcp.json", FormatCursor},
 		{"~/.cursor/mcp.json", FormatCursor},
+		{".vscode/mcp.json", FormatCopilot},
+		{"project/.vscode/mcp.json", FormatCopilot},
 		{"opencode.json", FormatOpenCode},
 		{"~/.config/opencode/opencode.json", FormatOpenCode},
 		{"random.json", FormatClaude}, // default
@@ -382,12 +384,13 @@ func TestIsMCPFile(t *testing.T) {
 	}{
 		{".mcp.json", true},
 		{".cursor/mcp.json", true},
+		{".vscode/mcp.json", true},
 		{"opencode.json", true},
 		{".claude.json", true},
 		{".claude/settings.local.json", true},
 		{"SKILL.md", false},
 		{"random.json", false},
-		{"mcp.json", false}, // Only .cursor/mcp.json, not bare mcp.json
+		{"mcp.json", false}, // Only .cursor/mcp.json or .vscode/mcp.json, not bare
 	}
 
 	for _, tt := range tests {
@@ -407,6 +410,7 @@ func TestMCPOutputFilename(t *testing.T) {
 	}{
 		{FormatClaude, ".mcp.json"},
 		{FormatCursor, "mcp.json"},
+		{FormatCopilot, "mcp.json"},
 		{FormatOpenCode, "opencode.json"},
 	}
 
@@ -417,6 +421,148 @@ func TestMCPOutputFilename(t *testing.T) {
 				t.Errorf("MCPOutputFilename(%v) = %q, want %q", tt.format, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseCopilotMCP(t *testing.T) {
+	input := `{
+  "servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "env": {
+        "DEBUG": "true"
+      }
+    },
+    "remote-api": {
+      "type": "http",
+      "url": "https://api.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer xxx"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "id": "api-key",
+      "type": "promptString",
+      "description": "API Key"
+    }
+  ]
+}`
+
+	config, err := ParseCopilotMCP([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseCopilotMCP failed: %v", err)
+	}
+
+	if config.GetFormat() != FormatCopilot {
+		t.Errorf("format = %v, want %v", config.GetFormat(), FormatCopilot)
+	}
+
+	if len(config.Servers) != 2 {
+		t.Errorf("server count = %d, want 2", len(config.Servers))
+	}
+
+	fs := config.Servers["filesystem"]
+	if fs == nil {
+		t.Fatal("missing filesystem server")
+	}
+	if fs.Command != "npx" {
+		t.Errorf("command = %q, want %q", fs.Command, "npx")
+	}
+	if len(fs.Args) != 3 {
+		t.Errorf("args count = %d, want 3", len(fs.Args))
+	}
+
+	remote := config.Servers["remote-api"]
+	if remote == nil {
+		t.Fatal("missing remote-api server")
+	}
+	if remote.URL != "https://api.example.com/mcp" {
+		t.Errorf("url = %q, want %q", remote.URL, "https://api.example.com/mcp")
+	}
+}
+
+func TestConvertClaudeToCopilot(t *testing.T) {
+	input := `{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+      "env": {
+        "DEBUG": "true"
+      }
+    }
+  }
+}`
+
+	config, err := ParseClaudeMCP([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseClaudeMCP failed: %v", err)
+	}
+
+	output, err := ConvertMCP(config, FormatCopilot)
+	if err != nil {
+		t.Fatalf("ConvertMCP failed: %v", err)
+	}
+
+	// Parse output as Copilot format
+	var parsed CopilotMCPConfig
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		t.Fatalf("failed to parse converted output: %v", err)
+	}
+
+	server := parsed.Servers["filesystem"]
+	if server == nil {
+		t.Fatal("missing filesystem server in output")
+	}
+	if server.Command != "npx" {
+		t.Errorf("command = %q, want %q", server.Command, "npx")
+	}
+	if server.Env["DEBUG"] != "true" {
+		t.Errorf("env DEBUG = %q, want %q", server.Env["DEBUG"], "true")
+	}
+}
+
+func TestConvertCopilotToClaude(t *testing.T) {
+	input := `{
+  "servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+      "env": {
+        "DEBUG": "true"
+      }
+    }
+  }
+}`
+
+	config, err := ParseCopilotMCP([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseCopilotMCP failed: %v", err)
+	}
+
+	output, err := ConvertMCP(config, FormatClaude)
+	if err != nil {
+		t.Fatalf("ConvertMCP failed: %v", err)
+	}
+
+	// Parse output as Claude format
+	var parsed ClaudeMCPConfig
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		t.Fatalf("failed to parse converted output: %v", err)
+	}
+
+	server := parsed.MCPServers["filesystem"]
+	if server == nil {
+		t.Fatal("missing filesystem server in output")
+	}
+	if server.Command != "npx" {
+		t.Errorf("command = %q, want %q", server.Command, "npx")
+	}
+	if server.Env["DEBUG"] != "true" {
+		t.Errorf("env DEBUG = %q, want %q", server.Env["DEBUG"], "true")
 	}
 }
 
