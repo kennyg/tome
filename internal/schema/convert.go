@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"strings"
 )
 
 // Convert transforms a skill from one format to another.
@@ -389,6 +390,162 @@ func ConvertCommandWithInfo(cmd Skill, targetFormat Format) (*ConversionResult, 
 	if targetFormat == FormatCursor {
 		result.Warnings = append(result.Warnings,
 			"Cursor doesn't have commands; converting to rule instead")
+	}
+
+	return result, nil
+}
+
+// ConvertInstructions transforms instructions from one format to another.
+// Returns the converted instructions as bytes ready to write.
+func ConvertInstructions(inst Skill, targetFormat Format) ([]byte, error) {
+	body := inst.GetBody()
+	desc := inst.GetDescription()
+
+	var target Skill
+	switch targetFormat {
+	case FormatClaude:
+		ci := &ClaudeInstructions{Body: body}
+		ci.SetFormat(FormatClaude)
+		target = ci
+	case FormatOpenCode:
+		ci := &ClaudeInstructions{Body: body}
+		ci.SetFormat(FormatOpenCode)
+		target = ci
+	case FormatCopilot:
+		ci := &CopilotInstructions{
+			Description: desc,
+			Body:        body,
+		}
+		// Try to preserve applyTo if source is Copilot
+		if src, ok := inst.(*CopilotInstructions); ok {
+			ci.ApplyTo = src.ApplyTo
+		}
+		target = ci
+	case FormatCursor:
+		cr := &CursorRules{
+			Description: desc,
+			Body:        body,
+		}
+		// Try to preserve globs if source is Cursor MDC
+		if src, ok := inst.(*CursorRules); ok {
+			cr.Globs = src.Globs
+			cr.AlwaysApply = src.AlwaysApply
+		}
+		target = cr
+	default:
+		return nil, fmt.Errorf("unsupported target format for instructions: %s", targetFormat)
+	}
+
+	return target.Serialize()
+}
+
+// ConvertToClaudeInstructions converts any instructions to ClaudeInstructions
+func ConvertToClaudeInstructions(inst Skill) *ClaudeInstructions {
+	if ci, ok := inst.(*ClaudeInstructions); ok {
+		return ci
+	}
+
+	return &ClaudeInstructions{
+		Body:         inst.GetBody(),
+		sourceFormat: FormatClaude,
+	}
+}
+
+// ConvertToCopilotInstructions converts any instructions to CopilotInstructions
+func ConvertToCopilotInstructions(inst Skill) *CopilotInstructions {
+	if ci, ok := inst.(*CopilotInstructions); ok {
+		return ci
+	}
+
+	ci := &CopilotInstructions{
+		Description: inst.GetDescription(),
+		Body:        inst.GetBody(),
+	}
+
+	// Try to derive description from body if empty
+	if ci.Description == "" {
+		// Use first line as description
+		lines := strings.SplitN(ci.Body, "\n", 2)
+		if len(lines) > 0 {
+			first := strings.TrimPrefix(lines[0], "# ")
+			first = strings.TrimSpace(first)
+			if len(first) > 100 {
+				first = first[:100] + "..."
+			}
+			ci.Description = first
+		}
+	}
+
+	return ci
+}
+
+// ConvertToCursorRules converts any instructions to CursorRules
+func ConvertToCursorRules(inst Skill) *CursorRules {
+	if cr, ok := inst.(*CursorRules); ok {
+		return cr
+	}
+
+	return &CursorRules{
+		Description: inst.GetDescription(),
+		Body:        inst.GetBody(),
+		isLegacy:    true, // Default to legacy format for simplicity
+	}
+}
+
+// ParseInstructions parses content as instructions based on the specified format
+func ParseInstructions(content []byte, format Format) (Skill, error) {
+	switch format {
+	case FormatClaude:
+		return ParseClaudeInstructions(content)
+	case FormatOpenCode:
+		return ParseOpenCodeInstructions(content)
+	case FormatCopilot:
+		return ParseCopilotInstructions(content)
+	case FormatCursor:
+		return ParseCursorRules(content)
+	default:
+		return nil, fmt.Errorf("unsupported format for instructions: %s", format)
+	}
+}
+
+// ParseInstructionsAuto attempts to detect the format and parse as instructions
+func ParseInstructionsAuto(content []byte, filename string) (Skill, error) {
+	format := DetectFormat(filename, content)
+	return ParseInstructions(content, format)
+}
+
+// ConvertInstructionsWithInfo converts instructions and returns detailed information
+func ConvertInstructionsWithInfo(inst Skill, targetFormat Format) (*ConversionResult, error) {
+	content, err := ConvertInstructions(inst, targetFormat)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &ConversionResult{
+		SourceFormat: inst.GetFormat(),
+		TargetFormat: targetFormat,
+		SourceName:   inst.GetName(),
+		TargetName:   inst.GetName(),
+		Content:      content,
+	}
+
+	// Check for potential data loss
+	if ci, ok := inst.(*CopilotInstructions); ok {
+		if ci.ApplyTo != "" && targetFormat != FormatCopilot {
+			result.Warnings = append(result.Warnings,
+				"applyTo glob pattern is Copilot-specific (will be omitted)")
+		}
+	}
+
+	if cr, ok := inst.(*CursorRules); ok {
+		if cr.Globs != "" && targetFormat != FormatCursor {
+			result.Warnings = append(result.Warnings,
+				"globs field is Cursor-specific (will be omitted)")
+		}
+		if cr.AlwaysApply && targetFormat != FormatCursor {
+			result.Warnings = append(result.Warnings,
+				"alwaysApply field is Cursor-specific (will be omitted)")
+		}
 	}
 
 	return result, nil

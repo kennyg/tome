@@ -2,6 +2,11 @@
 // It provides parsing, serialization, and conversion between formats.
 package schema
 
+import (
+	"path/filepath"
+	"strings"
+)
+
 // Format represents an AI agent artifact format
 type Format string
 
@@ -59,12 +64,13 @@ type SkillMetadata struct {
 	Body        string
 }
 
-// ArtifactType represents the type of artifact (skill, command, etc.)
+// ArtifactType represents the type of artifact (skill, command, instructions)
 type ArtifactType string
 
 const (
-	ArtifactSkill   ArtifactType = "skill"
-	ArtifactCommand ArtifactType = "command"
+	ArtifactSkill        ArtifactType = "skill"
+	ArtifactCommand      ArtifactType = "command"
+	ArtifactInstructions ArtifactType = "instructions"
 )
 
 // DetectFormat attempts to detect the format from file path or content
@@ -90,8 +96,22 @@ func DetectFormat(filename string, content []byte) Format {
 	return FormatClaude
 }
 
-// DetectArtifactType attempts to detect whether a file is a skill or command
+// DetectArtifactType attempts to detect whether a file is a skill, command, or instructions
 func DetectArtifactType(filename string) ArtifactType {
+	baseLower := strings.ToLower(filepath.Base(filename))
+
+	// Instructions patterns (check first as they're most specific)
+	switch {
+	case baseLower == "claude.md" || baseLower == "agents.md":
+		return ArtifactInstructions
+	case hasExtension(filename, ".instructions.md"):
+		return ArtifactInstructions
+	case baseLower == ".cursorrules":
+		return ArtifactInstructions
+	case hasExtension(filename, ".mdc") && containsPath(filename, ".cursor/rules"):
+		return ArtifactInstructions
+	}
+
 	switch {
 	// Copilot patterns
 	case hasExtension(filename, ".agent.md"):
@@ -111,8 +131,8 @@ func DetectArtifactType(filename string) ArtifactType {
 	case hasBasename(filename, "SKILL.md"):
 		return ArtifactSkill
 
-	// Cursor - all rules are skills
-	case containsPath(filename, ".cursor"):
+	// Cursor rules (non-instructions) are skills
+	case containsPath(filename, ".cursor/rules"):
 		return ArtifactSkill
 	}
 
