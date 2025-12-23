@@ -157,6 +157,34 @@ func ParseCopilotPrompt(content []byte) (*CopilotPrompt, error) {
 	return prompt, nil
 }
 
+// ToMetadata extracts common metadata from the prompt
+func (p *CopilotPrompt) ToMetadata() SkillMetadata {
+	return SkillMetadata{
+		Name:        p.GetName(),
+		Description: p.Description,
+		Body:        p.Body,
+	}
+}
+
+// FromMetadata populates the prompt from common metadata
+func (p *CopilotPrompt) FromMetadata(m SkillMetadata) {
+	p.Agent = m.Name
+	p.Description = m.Description
+	p.Body = m.Body
+}
+
+// Filename returns the expected filename for this prompt
+func (p *CopilotPrompt) Filename() string {
+	name := p.GetName()
+	if name == "" || name == "prompt" {
+		name = "command"
+	}
+	// Convert to kebab-case
+	name = strings.ToLower(name)
+	name = strings.ReplaceAll(name, " ", "-")
+	return name + ".prompt.md"
+}
+
 // IsCopilotFile checks if a filename matches Copilot patterns
 func IsCopilotFile(filename string) bool {
 	base := filepath.Base(filename)

@@ -59,6 +59,14 @@ type SkillMetadata struct {
 	Body        string
 }
 
+// ArtifactType represents the type of artifact (skill, command, etc.)
+type ArtifactType string
+
+const (
+	ArtifactSkill   ArtifactType = "skill"
+	ArtifactCommand ArtifactType = "command"
+)
+
 // DetectFormat attempts to detect the format from file path or content
 func DetectFormat(filename string, content []byte) Format {
 	// Check by filename extension/pattern
@@ -80,6 +88,36 @@ func DetectFormat(filename string, content []byte) Format {
 
 	// Default to Claude format
 	return FormatClaude
+}
+
+// DetectArtifactType attempts to detect whether a file is a skill or command
+func DetectArtifactType(filename string) ArtifactType {
+	switch {
+	// Copilot patterns
+	case hasExtension(filename, ".agent.md"):
+		return ArtifactSkill
+	case hasExtension(filename, ".prompt.md"):
+		return ArtifactCommand
+
+	// Claude/OpenCode patterns
+	case containsPath(filename, "commands"):
+		return ArtifactCommand
+	case containsPath(filename, "command"):
+		return ArtifactCommand
+	case containsPath(filename, "skills"):
+		return ArtifactSkill
+	case containsPath(filename, "skill"):
+		return ArtifactSkill
+	case hasBasename(filename, "SKILL.md"):
+		return ArtifactSkill
+
+	// Cursor - all rules are skills
+	case containsPath(filename, ".cursor"):
+		return ArtifactSkill
+	}
+
+	// Default to skill
+	return ArtifactSkill
 }
 
 // helper functions for path detection

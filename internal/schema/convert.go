@@ -225,3 +225,171 @@ func toKebabCase(s string) string {
 	}
 	return string(result)
 }
+
+// ConvertCommand transforms a command from one format to another.
+// Returns the converted command as bytes ready to write.
+func ConvertCommand(cmd Skill, targetFormat Format) ([]byte, error) {
+	// Extract common metadata
+	meta := SkillMetadata{
+		Name:        cmd.GetName(),
+		Description: cmd.GetDescription(),
+		Body:        cmd.GetBody(),
+	}
+
+	// Get version/author if available
+	switch c := cmd.(type) {
+	case *ClaudeCommand:
+		meta.Version = c.Version
+		meta.Author = c.Author
+	}
+
+	// Create target format command
+	var target Skill
+	switch targetFormat {
+	case FormatClaude, FormatOpenCode:
+		cc := &ClaudeCommand{}
+		cc.FromMetadata(meta)
+		cc.SetFormat(targetFormat)
+		target = cc
+	case FormatCopilot:
+		cp := &CopilotPrompt{}
+		cp.FromMetadata(meta)
+		target = cp
+	case FormatCursor:
+		// Cursor doesn't have a command concept, convert to rule
+		cs := &CursorSkill{}
+		cs.FromMetadata(meta)
+		target = cs
+	default:
+		return nil, fmt.Errorf("unsupported target format for command: %s", targetFormat)
+	}
+
+	return target.Serialize()
+}
+
+// ConvertToClaudeCommand converts any command to ClaudeCommand
+func ConvertToClaudeCommand(cmd Skill) *ClaudeCommand {
+	if cc, ok := cmd.(*ClaudeCommand); ok {
+		return cc
+	}
+
+	cc := &ClaudeCommand{
+		Name:        cmd.GetName(),
+		Description: cmd.GetDescription(),
+		Body:        cmd.GetBody(),
+	}
+
+	return cc
+}
+
+// ConvertToCopilotPrompt converts any command to CopilotPrompt
+func ConvertToCopilotPrompt(cmd Skill) *CopilotPrompt {
+	if cp, ok := cmd.(*CopilotPrompt); ok {
+		return cp
+	}
+
+	cp := &CopilotPrompt{
+		Agent:       cmd.GetName(),
+		Description: cmd.GetDescription(),
+		Body:        cmd.GetBody(),
+	}
+
+	return cp
+}
+
+// ParseCommand parses content as a command based on the specified format
+func ParseCommand(content []byte, format Format) (Skill, error) {
+	switch format {
+	case FormatClaude:
+		return ParseClaudeCommand(content)
+	case FormatOpenCode:
+		return ParseOpenCodeCommand(content)
+	case FormatCopilot:
+		return ParseCopilotPrompt(content)
+	case FormatCursor:
+		// Cursor doesn't have commands, parse as skill/rule
+		return ParseCursorSkill(content)
+	default:
+		return nil, fmt.Errorf("unsupported format for command: %s", format)
+	}
+}
+
+// ParseCommandAuto attempts to detect the format and parse as command
+func ParseCommandAuto(content []byte, filename string) (Skill, error) {
+	format := DetectFormat(filename, content)
+	return ParseCommand(content, format)
+}
+
+// CommandOutputFilename returns the appropriate filename for a command in the target format
+func CommandOutputFilename(cmd Skill, targetFormat Format) string {
+	name := cmd.GetName()
+	if name == "" {
+		name = "command"
+	}
+
+	switch targetFormat {
+	case FormatClaude, FormatOpenCode:
+		return toKebabCase(name) + ".md"
+	case FormatCopilot:
+		return toKebabCase(name) + ".prompt.md"
+	case FormatCursor:
+		return toKebabCase(name) + ".md"
+	default:
+		return name + ".md"
+	}
+}
+
+// CommandOutputDirectory returns the appropriate directory structure for a command
+func CommandOutputDirectory(cmd Skill, targetFormat Format) string {
+	switch targetFormat {
+	case FormatClaude:
+		return "commands"
+	case FormatOpenCode:
+		return ".opencode/command"
+	case FormatCopilot:
+		return "prompts"
+	case FormatCursor:
+		return ".cursor/rules"
+	default:
+		return ""
+	}
+}
+
+// ConvertCommandWithInfo converts a command and returns detailed information
+func ConvertCommandWithInfo(cmd Skill, targetFormat Format) (*ConversionResult, error) {
+	content, err := ConvertCommand(cmd, targetFormat)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &ConversionResult{
+		SourceFormat: cmd.GetFormat(),
+		TargetFormat: targetFormat,
+		SourceName:   cmd.GetName(),
+		TargetName:   cmd.GetName(),
+		Content:      content,
+	}
+
+	// Check for potential data loss
+	if cc, ok := cmd.(*ClaudeCommand); ok {
+		if len(cc.AllowedTools) > 0 && targetFormat != FormatClaude && targetFormat != FormatOpenCode {
+			result.Warnings = append(result.Warnings,
+				"allowed-tools field is Claude/OpenCode-specific (will be omitted)")
+		}
+		if cc.Version != "" && targetFormat == FormatCopilot {
+			result.Warnings = append(result.Warnings,
+				"version field not supported in Copilot prompts (will be omitted)")
+		}
+		if cc.Author != "" && targetFormat == FormatCopilot {
+			result.Warnings = append(result.Warnings,
+				"author field not supported in Copilot prompts (will be omitted)")
+		}
+	}
+
+	if targetFormat == FormatCursor {
+		result.Warnings = append(result.Warnings,
+			"Cursor doesn't have commands; converting to rule instead")
+	}
+
+	return result, nil
+}
