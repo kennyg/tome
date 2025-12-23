@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/kennyg/tome/internal/schema"
 )
 
 // Agent represents a supported AI coding agent
@@ -102,14 +104,14 @@ func KnownAgents() []AgentConfig {
 			Name:        AgentCopilot,
 			DisplayName: "GitHub Copilot",
 			ConfigDir:   ".github",
-			SkillsDir:   "", // Uses copilot-instructions.md instead
-			CommandsDir: "",
+			SkillsDir:   "agents",  // .agent.md files
+			CommandsDir: "prompts", // .prompt.md files
 			Capabilities: AgentCapabilities{
-				Skills:   false, // Uses different format
-				Commands: false,
-				Prompts:  false,
+				Skills:   true, // Now supported via transmogrify conversion
+				Commands: true, // Now supported via transmogrify conversion
+				Prompts:  true,
 				Hooks:    false,
-				Agents:   false,
+				Agents:   true,
 				Plugins:  false,
 				MCP:      false,
 			},
@@ -118,11 +120,11 @@ func KnownAgents() []AgentConfig {
 			Name:        AgentCursor,
 			DisplayName: "Cursor",
 			ConfigDir:   ".cursor",
-			SkillsDir:   "", // Uses .cursorrules instead
-			CommandsDir: "",
+			SkillsDir:   "rules", // .md rules files
+			CommandsDir: "rules", // Also rules (Cursor doesn't distinguish)
 			Capabilities: AgentCapabilities{
-				Skills:   false, // Uses different format
-				Commands: false,
+				Skills:   true, // Now supported via transmogrify conversion
+				Commands: true, // Now supported via transmogrify conversion
 				Prompts:  false,
 				Hooks:    false,
 				Agents:   false,
@@ -241,4 +243,21 @@ func AgentPaths(home string, agent Agent) (configDir, skillsDir, commandsDir str
 	skillsDir = filepath.Join(configDir, cfg.SkillsDir)
 	commandsDir = filepath.Join(configDir, cfg.CommandsDir)
 	return
+}
+
+// AgentToFormat converts a config.Agent to schema.Format for artifact conversion
+func AgentToFormat(agent Agent) schema.Format {
+	switch agent {
+	case AgentClaude, AgentWindsurf:
+		return schema.FormatClaude
+	case AgentOpenCode:
+		return schema.FormatOpenCode
+	case AgentCopilot:
+		return schema.FormatCopilot
+	case AgentCursor:
+		return schema.FormatCursor
+	default:
+		// Default to Claude format
+		return schema.FormatClaude
+	}
 }

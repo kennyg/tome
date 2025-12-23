@@ -14,6 +14,7 @@ import (
 	"github.com/kennyg/tome/internal/config"
 	"github.com/kennyg/tome/internal/detect"
 	"github.com/kennyg/tome/internal/fetch"
+	"github.com/kennyg/tome/internal/schema"
 	"github.com/kennyg/tome/internal/source"
 	"github.com/kennyg/tome/internal/ui"
 )
@@ -599,6 +600,9 @@ func doInstallWithExtraReqs(art *artifact.Artifact, paths *config.Paths, include
 }
 
 func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile) []detect.Requirement {
+	// Convert artifact to target format if needed
+	convertedContent, wasConverted := convertArtifactIfNeeded(art, paths)
+
 	installPath := getInstallPath(art, paths)
 	installDir := filepath.Dir(installPath)
 
@@ -607,8 +611,12 @@ func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes
 		exitWithError(fmt.Sprintf("failed to create directory: %v", err))
 	}
 
-	// Write the main file
-	if err := os.WriteFile(installPath, []byte(art.Content), 0644); err != nil {
+	// Write the main file (use converted content if available)
+	contentToWrite := art.Content
+	if wasConverted {
+		contentToWrite = convertedContent
+	}
+	if err := os.WriteFile(installPath, []byte(contentToWrite), 0644); err != nil {
 		exitWithError(fmt.Sprintf("failed to write file: %v", err))
 	}
 
@@ -673,29 +681,133 @@ func doInstallWithIncludes(art *artifact.Artifact, paths *config.Paths, includes
 	return allReqs
 }
 
-func getInstallPath(art *artifact.Artifact, paths *config.Paths) string {
+// convertArtifactIfNeeded converts artifact content to the target agent's format
+// Returns the converted content and whether conversion was performed
+func convertArtifactIfNeeded(art *artifact.Artifact, paths *config.Paths) (string, bool) {
+	// Determine source format from the artifact's source URL/filename
+	sourceFilename := art.Filename
+	if art.Source != "" {
+		// Extract filename from source URL
+		if idx := strings.LastIndex(art.Source, "/"); idx >= 0 {
+			sourceFilename = art.Source[idx+1:]
+		}
+	}
+
+	sourceFormat := schema.DetectFormat(sourceFilename, []byte(art.Content))
+	targetFormat := config.AgentToFormat(paths.Agent)
+
+	// No conversion needed if formats match
+	if sourceFormat == targetFormat {
+		return "", false
+	}
+
+	// Parse and convert based on artifact type
+	var converted []byte
+	var err error
+	var result *schema.ConversionResult
+
 	switch art.Type {
 	case artifact.TypeSkill:
-		// Skills go in a directory with SKILL.md
-		safeDir := fetch.SanitizeFilename(art.Name)
-		return filepath.Join(paths.SkillsDir, safeDir, artifact.SkillFilename)
+		skill, parseErr := schema.Parse([]byte(art.Content), sourceFormat)
+		if parseErr != nil {
+			// Can't parse, skip conversion
+			return "", false
+		}
+		result, err = schema.ConvertWithInfo(skill, targetFormat)
+		if err == nil {
+			converted = result.Content
+		}
+
 	case artifact.TypeCommand:
-		// Commands are just .md files
-		safeName := fetch.SanitizeFilename(art.Name) + ".md"
-		return filepath.Join(paths.CommandsDir, safeName)
+		cmd, parseErr := schema.ParseCommand([]byte(art.Content), sourceFormat)
+		if parseErr != nil {
+			return "", false
+		}
+		result, err = schema.ConvertCommandWithInfo(cmd, targetFormat)
+		if err == nil {
+			converted = result.Content
+		}
+
+	default:
+		// Unknown type, skip conversion
+		return "", false
+	}
+
+	if err != nil {
+		// Conversion failed, use original
+		return "", false
+	}
+
+	// Log conversion
+	fmt.Println(ui.Muted.Render(fmt.Sprintf("    Converting: %s → %s", sourceFormat, targetFormat)))
+
+	// Show warnings if any
+	if result != nil && len(result.Warnings) > 0 {
+		for _, w := range result.Warnings {
+			fmt.Println(ui.Warning.Render("      ⚠ " + w))
+		}
+	}
+
+	return string(converted), true
+}
+
+func getInstallPath(art *artifact.Artifact, paths *config.Paths) string {
+	targetFormat := config.AgentToFormat(paths.Agent)
+	safeName := fetch.SanitizeFilename(art.Name)
+
+	switch art.Type {
+	case artifact.TypeSkill:
+		// Get the appropriate filename for the target format
+		filename := getSkillFilename(safeName, targetFormat)
+		if targetFormat == schema.FormatCopilot {
+			// Copilot: agents/<name>.agent.md (flat structure)
+			return filepath.Join(paths.SkillsDir, filename)
+		} else if targetFormat == schema.FormatCursor {
+			// Cursor: .cursor/rules/<name>.md (flat structure)
+			return filepath.Join(paths.SkillsDir, filename)
+		}
+		// Claude/OpenCode: skills/<name>/SKILL.md (directory structure)
+		return filepath.Join(paths.SkillsDir, safeName, filename)
+
+	case artifact.TypeCommand:
+		// Get the appropriate filename for the target format
+		filename := getCommandFilename(safeName, targetFormat)
+		return filepath.Join(paths.CommandsDir, filename)
+
 	case artifact.TypeAgent:
 		// Agents are .md files in agents/
 		agentCfg := config.GetAgentConfig(paths.Agent)
 		if agentCfg != nil && agentCfg.AgentsDir != "" {
 			agentsDir := filepath.Join(paths.AgentDir, agentCfg.AgentsDir)
-			safeName := fetch.SanitizeFilename(art.Name) + ".md"
-			return filepath.Join(agentsDir, safeName)
+			return filepath.Join(agentsDir, safeName+".md")
 		}
 		// Fallback to commands if agents not supported
-		safeName := fetch.SanitizeFilename(art.Name) + ".md"
-		return filepath.Join(paths.CommandsDir, safeName)
+		return filepath.Join(paths.CommandsDir, safeName+".md")
+
 	default:
 		return filepath.Join(paths.CommandsDir, art.Filename)
+	}
+}
+
+// getSkillFilename returns the appropriate skill filename for the target format
+func getSkillFilename(name string, format schema.Format) string {
+	switch format {
+	case schema.FormatCopilot:
+		return name + ".agent.md"
+	case schema.FormatCursor:
+		return name + ".md"
+	default: // Claude, OpenCode
+		return artifact.SkillFilename
+	}
+}
+
+// getCommandFilename returns the appropriate command filename for the target format
+func getCommandFilename(name string, format schema.Format) string {
+	switch format {
+	case schema.FormatCopilot:
+		return name + ".prompt.md"
+	default: // Claude, OpenCode, Cursor
+		return name + ".md"
 	}
 }
 
