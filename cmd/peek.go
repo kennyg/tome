@@ -89,7 +89,7 @@ func peekGitHub(client *fetch.Client, src *source.Source) {
 	artifacts, err := client.FindArtifacts(apiURL)
 	if err != nil {
 		// Maybe it's a directory with SKILL.md
-		skillURL := src.GitHubRawURL("SKILL.md")
+		skillURL := src.GitHubRawURL(artifact.SkillFilename)
 		content, fetchErr := client.FetchURL(skillURL)
 		if fetchErr != nil {
 			exitWithError(fmt.Sprintf("failed to scan source: %v", err))
@@ -103,7 +103,7 @@ func peekGitHub(client *fetch.Client, src *source.Source) {
 	}
 
 	if len(artifacts) == 0 {
-		skillURL := src.GitHubRawURL("SKILL.md")
+		skillURL := src.GitHubRawURL(artifact.SkillFilename)
 		content, err := client.FetchURL(skillURL)
 		if err != nil {
 			exitWithError("no artifacts found at source")

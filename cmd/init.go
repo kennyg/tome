@@ -85,7 +85,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Create directories
-	dirs := []string{"commands", "skills"}
+	dirs := []string{artifact.CommandsDirName, artifact.SkillsDirName}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			exitWithError(fmt.Sprintf("failed to create %s directory: %v", dir, err))

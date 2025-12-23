@@ -81,7 +81,7 @@ func runBuild(cmd *cobra.Command, args []string) {
 	// Scan commands/
 	commandsDir := manifest.CommandsDir
 	if commandsDir == "" {
-		commandsDir = "commands"
+		commandsDir = artifact.CommandsDirName
 	}
 
 	if info, err := os.Stat(commandsDir); err == nil && info.IsDir() {
@@ -115,7 +115,7 @@ func runBuild(cmd *cobra.Command, args []string) {
 	// Scan skills/
 	skillsDir := manifest.SkillsDir
 	if skillsDir == "" {
-		skillsDir = "skills"
+		skillsDir = artifact.SkillsDirName
 	}
 
 	if info, err := os.Stat(skillsDir); err == nil && info.IsDir() {
@@ -125,11 +125,11 @@ func runBuild(cmd *cobra.Command, args []string) {
 				continue
 			}
 
-			skillPath := filepath.Join(skillsDir, entry.Name(), "SKILL.md")
+			skillPath := filepath.Join(skillsDir, entry.Name(), artifact.SkillFilename)
 			content, err := os.ReadFile(skillPath)
 			if err != nil {
 				// Check for skill.md (lowercase)
-				skillPath = filepath.Join(skillsDir, entry.Name(), "skill.md")
+				skillPath = filepath.Join(skillsDir, entry.Name(), strings.ToLower(artifact.SkillFilename))
 				content, err = os.ReadFile(skillPath)
 				if err != nil {
 					warnings = append(warnings, fmt.Sprintf("skills/%s: no SKILL.md found", entry.Name()))

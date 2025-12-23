@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/kennyg/tome/internal/artifact"
 )
 
 // Index holds the apropos index data
@@ -104,7 +106,7 @@ func IsStale(skillsDir string, index *Index) (bool, error) {
 		}
 
 		skillPath := filepath.Join(skillsDir, entry.Name())
-		skillMdPath := filepath.Join(skillPath, "SKILL.md")
+		skillMdPath := filepath.Join(skillPath, artifact.SkillFilename)
 
 		info, err := os.Stat(skillMdPath)
 		if err != nil {
@@ -174,7 +176,7 @@ func scanSkillsDir(skillsDir string) ([]Skill, error) {
 }
 
 func parseSkill(skillPath string) (*Skill, error) {
-	skillMdPath := filepath.Join(skillPath, "SKILL.md")
+	skillMdPath := filepath.Join(skillPath, artifact.SkillFilename)
 
 	info, err := os.Stat(skillMdPath)
 	if err != nil {

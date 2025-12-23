@@ -172,12 +172,12 @@ func appendPath(baseURL, segment string) string {
 
 // agentSkillDirs are directories where different AI agents store skills
 var agentSkillDirs = []string{
-	"skills",          // Generic/tome standard
-	".agent/skills",   // agentskills.io standard
-	".github/skills",  // GitHub Copilot
-	".claude/skills",  // Claude Code
-	".opencode/skills", // OpenCode
-	".cursor/skills",  // Cursor
+	artifact.SkillsDirName,                      // Generic/tome standard
+	".agent/" + artifact.SkillsDirName,          // agentskills.io standard
+	".github/" + artifact.SkillsDirName,         // GitHub Copilot
+	".claude/" + artifact.SkillsDirName,         // Claude Code
+	".opencode/" + artifact.SkillsDirName,       // OpenCode
+	".cursor/" + artifact.SkillsDirName,         // Cursor
 }
 
 // FindArtifacts finds all artifact files in a GitHub directory using strict rules.
@@ -200,26 +200,26 @@ func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 
 	for _, item := range contents {
 		// Root level: Only SKILL.md is an artifact
-		if item.Type == "file" && strings.ToUpper(item.Name) == "SKILL.MD" {
+		if item.Type == "file" && strings.EqualFold(item.Name, artifact.SkillFilename) {
 			artifacts = append(artifacts, item)
 			continue
 		}
 
 		// Scan commands/ or command/ directory for .md files
-		if item.Type == "dir" && (item.Name == "commands" || item.Name == "command") {
+		if item.Type == "dir" && (item.Name == artifact.CommandsDirName || item.Name == "command") {
 			c.scanMarkdownDir(apiURL, item.Name, &artifacts)
 			continue
 		}
 
 		// Scan skills/ directory for skill subdirectories with SKILL.md
-		if item.Type == "dir" && item.Name == "skills" {
-			c.scanSkillsDir(apiURL, "skills", &artifacts)
+		if item.Type == "dir" && item.Name == artifact.SkillsDirName {
+			c.scanSkillsDir(apiURL, artifact.SkillsDirName, &artifacts)
 			continue
 		}
 
 		// Scan agents/ directory for .md files
-		if item.Type == "dir" && item.Name == "agents" {
-			c.scanMarkdownDir(apiURL, "agents", &artifacts)
+		if item.Type == "dir" && item.Name == artifact.AgentsDirName {
+			c.scanMarkdownDir(apiURL, artifact.AgentsDirName, &artifacts)
 			continue
 		}
 
@@ -230,8 +230,8 @@ func (c *Client) FindArtifacts(apiURL string) ([]GitHubContent, error) {
 		}
 
 		// Scan hooks/ directory for .sh files and hooks.json
-		if item.Type == "dir" && item.Name == "hooks" {
-			c.scanHooksDir(apiURL, "hooks", &artifacts)
+		if item.Type == "dir" && item.Name == artifact.HooksDirName {
+			c.scanHooksDir(apiURL, artifact.HooksDirName, &artifacts)
 			continue
 		}
 
@@ -291,16 +291,16 @@ func (c *Client) scanAgentDir(apiURL string, agentDirName string, artifacts *[]G
 		}
 
 		switch item.Name {
-		case "skills":
-			c.scanSkillsDir(apiURL, agentDirName+"/skills", artifacts)
-		case "commands", "command":
+		case artifact.SkillsDirName:
+			c.scanSkillsDir(apiURL, agentDirName+"/"+artifact.SkillsDirName, artifacts)
+		case artifact.CommandsDirName, "command":
 			c.scanMarkdownDir(agentURL, item.Name, artifacts)
-		case "agents":
-			c.scanMarkdownDir(agentURL, "agents", artifacts)
+		case artifact.AgentsDirName:
+			c.scanMarkdownDir(agentURL, artifact.AgentsDirName, artifacts)
 		case "prompts":
 			c.scanMarkdownDir(agentURL, "prompts", artifacts)
-		case "hooks":
-			c.scanHooksDir(agentURL, "hooks", artifacts)
+		case artifact.HooksDirName:
+			c.scanHooksDir(agentURL, artifact.HooksDirName, artifacts)
 		}
 	}
 }
@@ -315,7 +315,7 @@ func (c *Client) scanSkillsDir(apiURL string, skillsPath string, artifacts *[]Gi
 
 	for _, sub := range subContents {
 		// Check for SKILL.md directly in skills/ (flat structure)
-		if sub.Type == "file" && strings.ToUpper(sub.Name) == "SKILL.MD" {
+		if sub.Type == "file" && strings.EqualFold(sub.Name, artifact.SkillFilename) {
 			*artifacts = append(*artifacts, sub)
 			continue
 		}
@@ -325,7 +325,7 @@ func (c *Client) scanSkillsDir(apiURL string, skillsPath string, artifacts *[]Gi
 			skillContents, err := c.ListGitHubContents(skillURL)
 			if err == nil {
 				for _, skillFile := range skillContents {
-					if skillFile.Type == "file" && strings.ToUpper(skillFile.Name) == "SKILL.MD" {
+					if skillFile.Type == "file" && strings.EqualFold(skillFile.Name, artifact.SkillFilename) {
 						// Track the skill directory for fetching includes
 						skillFile.SkillDir = skillsPath + "/" + sub.Name
 						*artifacts = append(*artifacts, skillFile)
@@ -530,7 +530,7 @@ func (c *Client) discoverFilesRecursive(apiURL string, skillDir string, subPath 
 			}
 		} else if item.Type == "file" {
 			// Skip SKILL.md - it's handled separately as the main file
-			if strings.ToUpper(item.Name) == "SKILL.MD" {
+			if strings.EqualFold(item.Name, artifact.SkillFilename) {
 				continue
 			}
 
@@ -603,7 +603,7 @@ func ParseSkill(content []byte, sourceURL string) (*artifact.Artifact, error) {
 		Includes:    validIncludes,
 		SourceURL:   sourceURL,
 		Content:     string(content),
-		Filename:    "SKILL.md",
+		Filename:    artifact.SkillFilename,
 	}, nil
 }
 
@@ -728,8 +728,7 @@ func DetectArtifactType(filename string) artifact.Type {
 // not by checking individual files at root. This prevents random .md files
 // (docs, workflows, planning docs) from being treated as artifacts.
 func IsArtifactFile(filename string) bool {
-	base := strings.ToUpper(filepath.Base(filename))
-	return base == "SKILL.MD"
+	return strings.EqualFold(filepath.Base(filename), artifact.SkillFilename)
 }
 
 // CommandNameFromFile extracts a command name from a filename

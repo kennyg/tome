@@ -187,7 +187,7 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 	artifacts, err := client.FindArtifacts(apiURL)
 	if err != nil {
 		// Maybe it's a directory with SKILL.md
-		skillURL := src.GitHubRawURL("SKILL.md")
+		skillURL := src.GitHubRawURL(artifact.SkillFilename)
 		content, fetchErr := client.FetchURL(skillURL)
 		if fetchErr != nil {
 			exitWithError(fmt.Sprintf("failed to scan repo: %v", err))
@@ -204,7 +204,7 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 
 	if len(artifacts) == 0 {
 		// Check for SKILL.md specifically
-		skillURL := src.GitHubRawURL("SKILL.md")
+		skillURL := src.GitHubRawURL(artifact.SkillFilename)
 		content, err := client.FetchURL(skillURL)
 		if err == nil {
 			art, err := fetch.ParseSkill(content, skillURL)
@@ -659,7 +659,7 @@ func getInstallPath(art *artifact.Artifact, paths *config.Paths) string {
 	case artifact.TypeSkill:
 		// Skills go in a directory with SKILL.md
 		safeDir := fetch.SanitizeFilename(art.Name)
-		return filepath.Join(paths.SkillsDir, safeDir, "SKILL.md")
+		return filepath.Join(paths.SkillsDir, safeDir, artifact.SkillFilename)
 	case artifact.TypeCommand:
 		// Commands are just .md files
 		safeName := fetch.SanitizeFilename(art.Name) + ".md"
