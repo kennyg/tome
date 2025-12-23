@@ -125,27 +125,16 @@ func runLearn(cmd *cobra.Command, args []string) {
 }
 
 func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Paths) {
-	// Check if path points to a specific file
+	// Handle single file case
 	if src.Path != "" && strings.HasSuffix(strings.ToLower(src.Path), ".md") {
-		fmt.Println(ui.Info.Render("  Source: GitHub"))
-		fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s/%s", src.Owner, src.Repo)))
-		fmt.Println(ui.Muted.Render(fmt.Sprintf("    Path: %s", src.Path)))
-		fmt.Println()
-		// Single file
+		displayGitHubSource(src)
 		url := src.GitHubRawURL("")
 		learnSingleFile(client, url, filepath.Base(src.Path), src.String(), paths, nil)
 		return
 	}
 
-	// Fetch README.md for requirement detection (try multiple names)
-	var readmeReqs []detect.Requirement
-	for _, readmeName := range []string{"README.md", "readme.md", "Readme.md"} {
-		readmeURL := src.GitHubRawURL(readmeName)
-		if content, err := client.FetchURL(readmeURL); err == nil {
-			readmeReqs = detect.FromContent(string(content))
-			break
-		}
-	}
+	// Fetch README.md for requirement detection
+	readmeReqs := fetchReadmeRequirements(client, src)
 
 	// Try to list directory contents
 	apiURL := src.GitHubAPIURL()
@@ -156,10 +145,52 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 		return
 	}
 
-	// Try to fetch manifest for collection info
+	// Display source/collection info
 	manifest, _ := client.FetchManifest(apiURL)
+	displaySourceInfo(manifest, src)
+
+	// Find artifacts
+	fmt.Println(ui.Muted.Render("  Scanning for artifacts..."))
+	artifacts, err := client.FindArtifacts(apiURL)
+
+	// Handle fallback cases
+	if err != nil || len(artifacts) == 0 {
+		if tryFallbackSkill(client, src, paths, readmeReqs, err) {
+			return
+		}
+	}
+
+	// Install found artifacts
+	result := installFoundArtifacts(client, src, paths, artifacts, readmeReqs)
+
+	// Display summary
+	displayInstallSummary(result, src)
+}
+
+// displayGitHubSource shows source info for a GitHub URL
+func displayGitHubSource(src *source.Source) {
+	fmt.Println(ui.Info.Render("  Source: GitHub"))
+	fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s/%s", src.Owner, src.Repo)))
+	if src.Path != "" {
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    Path: %s", src.Path)))
+	}
+	fmt.Println()
+}
+
+// fetchReadmeRequirements fetches README.md and extracts requirements
+func fetchReadmeRequirements(client *fetch.Client, src *source.Source) []detect.Requirement {
+	for _, readmeName := range []string{"README.md", "readme.md", "Readme.md"} {
+		readmeURL := src.GitHubRawURL(readmeName)
+		if content, err := client.FetchURL(readmeURL); err == nil {
+			return detect.FromContent(string(content))
+		}
+	}
+	return nil
+}
+
+// displaySourceInfo shows collection or source information
+func displaySourceInfo(manifest *artifact.Manifest, src *source.Source) {
 	if manifest != nil && manifest.Name != "" {
-		// Display collection info
 		fmt.Println(ui.Info.Render("  Collection: " + manifest.Name))
 		if manifest.Description != "" {
 			fmt.Println(ui.Muted.Render("    " + manifest.Description))
@@ -174,71 +205,64 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 			fmt.Println(ui.Muted.Render(fmt.Sprintf("    tags: %s", strings.Join(manifest.Tags, ", "))))
 		}
 	} else {
-		fmt.Println(ui.Info.Render("  Source: GitHub"))
-		fmt.Println(ui.Muted.Render(fmt.Sprintf("    %s/%s", src.Owner, src.Repo)))
-		if src.Path != "" {
-			fmt.Println(ui.Muted.Render(fmt.Sprintf("    Path: %s", src.Path)))
-		}
+		displayGitHubSource(src)
+		return // displayGitHubSource already prints newline
 	}
 	fmt.Println()
+}
 
-	fmt.Println(ui.Muted.Render("  Scanning for artifacts..."))
-
-	artifacts, err := client.FindArtifacts(apiURL)
+// tryFallbackSkill attempts to find a SKILL.md when artifact scanning fails
+// Returns true if a skill was found and installed
+func tryFallbackSkill(client *fetch.Client, src *source.Source, paths *config.Paths, readmeReqs []detect.Requirement, scanErr error) bool {
+	skillURL := src.GitHubRawURL(artifact.SkillFilename)
+	content, err := client.FetchURL(skillURL)
 	if err != nil {
-		// Maybe it's a directory with SKILL.md
-		skillURL := src.GitHubRawURL(artifact.SkillFilename)
-		content, fetchErr := client.FetchURL(skillURL)
-		if fetchErr != nil {
-			exitWithError(fmt.Sprintf("failed to scan repo: %v", err))
-		}
-		// Found a SKILL.md
-		art, parseErr := fetch.ParseSkill(content, skillURL)
-		if parseErr != nil {
-			exitWithError(parseErr.Error())
-		}
-		art.Source = src.String()
-		installArtifactWithExtraReqs(art, paths, readmeReqs)
-		return
-	}
-
-	if len(artifacts) == 0 {
-		// Check for SKILL.md specifically
-		skillURL := src.GitHubRawURL(artifact.SkillFilename)
-		content, err := client.FetchURL(skillURL)
-		if err == nil {
-			art, err := fetch.ParseSkill(content, skillURL)
-			if err == nil {
-				art.Source = src.String()
-				installArtifactWithExtraReqs(art, paths, readmeReqs)
-				return
-			}
-		}
-
-		// No artifacts found - check if this is an npm package
+		// No SKILL.md found - check if this is an npm package
 		pkgURL := src.GitHubRawURL("package.json")
-		if pkgContent, err := client.FetchURL(pkgURL); err == nil {
+		if pkgContent, pkgErr := client.FetchURL(pkgURL); pkgErr == nil {
 			showNpmPackageGuidance(pkgContent, src)
-			return
+			return true
 		}
-
+		if scanErr != nil {
+			exitWithError(fmt.Sprintf("failed to scan repo: %v", scanErr))
+		}
 		exitWithError("no artifacts found in repository")
 	}
 
+	art, parseErr := fetch.ParseSkill(content, skillURL)
+	if parseErr != nil {
+		exitWithError(parseErr.Error())
+	}
+	art.Source = src.String()
+	installArtifactWithExtraReqs(art, paths, readmeReqs)
+	return true
+}
+
+// installResult holds the results of installing artifacts
+type installResult struct {
+	installed     []string
+	skipped       []skippedArtifact
+	allReqs       []detect.Requirement
+	skillContents []skillContent
+}
+
+type skippedArtifact struct {
+	name   string
+	reason string
+}
+
+type skillContent struct {
+	name    string
+	content string
+}
+
+// installFoundArtifacts installs all found artifacts and returns the results
+func installFoundArtifacts(client *fetch.Client, src *source.Source, paths *config.Paths, artifacts []fetch.GitHubContent, readmeReqs []detect.Requirement) installResult {
 	fmt.Println(ui.Success.Render(fmt.Sprintf("  Found %d artifact(s)", len(artifacts))))
 	fmt.Println()
 
-	// Install each artifact
-	var installed []string
-	var skipped []struct {
-		name   string
-		reason string
-	}
-	var allReqs []detect.Requirement
-	var skillContents []struct {
-		name    string
-		content string
-	}
+	var result installResult
+
 	for _, item := range artifacts {
 		url := item.DownloadURL
 		if url == "" {
@@ -248,106 +272,101 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 		content, err := client.FetchURL(url)
 		if err != nil {
 			fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipping %s: %v", item.Name, err)))
-			skipped = append(skipped, struct {
-				name   string
-				reason string
-			}{item.Name, fmt.Sprintf("fetch failed: %v", err)})
+			result.skipped = append(result.skipped, skippedArtifact{item.Name, fmt.Sprintf("fetch failed: %v", err)})
 			continue
 		}
 
 		art, err := parseArtifact(content, item.Name, url)
 		if err != nil {
 			fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipping %s: %v", item.Name, err)))
-			skipped = append(skipped, struct {
-				name   string
-				reason string
-			}{item.Name, fmt.Sprintf("parse failed: %v", err)})
+			result.skipped = append(result.skipped, skippedArtifact{item.Name, fmt.Sprintf("parse failed: %v", err)})
 			continue
 		}
 
-		// Auto-discover all files in the skill directory
-		var includes []fetch.IncludedFile
-		if art.Type == artifact.TypeSkill {
-			// Determine the skill directory
-			skillDir := item.SkillDir
-			if skillDir == "" && src.Path != "" {
-				// If user specified a path directly (e.g., skills/skill-creator),
-				// use that path as the skill directory
-				skillDir = src.Path
-			}
-			if skillDir != "" {
-				// Use base API URL (repo root) for discovery
-				var baseAPIURL string
-				if src.Host == "github.com" || src.Host == "" {
-					baseAPIURL = fmt.Sprintf("https://api.github.com/repos/%s/%s/contents", src.Owner, src.Repo)
-				} else {
-					// GitHub Enterprise
-					baseAPIURL = fmt.Sprintf("https://%s/api/v3/repos/%s/%s/contents", src.Host, src.Owner, src.Repo)
-				}
-				if src.Ref != "" {
-					baseAPIURL += "?ref=" + src.Ref
-				}
-				includes, err = client.DiscoverSkillFiles(baseAPIURL, skillDir)
-				if err != nil {
-					fmt.Println(ui.Warning.Render(fmt.Sprintf("  Warning: couldn't fetch skill files for %s: %v", item.Name, err)))
-					// Continue anyway - the SKILL.md itself is still valuable
-				}
-			}
-		}
+		// Discover skill includes if applicable
+		includes := discoverSkillIncludes(client, src, item, art)
 
 		art.Source = src.String()
 		reqs := installArtifactQuietWithExtras(art, paths, includes, readmeReqs)
-		installed = append(installed, art.Name)
-		allReqs = detect.Merge(allReqs, reqs)
+		result.installed = append(result.installed, art.Name)
+		result.allReqs = detect.Merge(result.allReqs, reqs)
 
-		// Track skill content for usage display
 		if art.Type == artifact.TypeSkill {
-			skillContents = append(skillContents, struct {
-				name    string
-				content string
-			}{art.Name, string(content)})
+			result.skillContents = append(result.skillContents, skillContent{art.Name, string(content)})
 		}
 	}
 
-	// Summary
+	return result
+}
+
+// discoverSkillIncludes finds additional files to include with a skill
+func discoverSkillIncludes(client *fetch.Client, src *source.Source, item fetch.GitHubContent, art *artifact.Artifact) []fetch.IncludedFile {
+	if art.Type != artifact.TypeSkill {
+		return nil
+	}
+
+	skillDir := item.SkillDir
+	if skillDir == "" && src.Path != "" {
+		skillDir = src.Path
+	}
+	if skillDir == "" {
+		return nil
+	}
+
+	// Build base API URL for discovery
+	var baseAPIURL string
+	if src.Host == "github.com" || src.Host == "" {
+		baseAPIURL = fmt.Sprintf("https://api.github.com/repos/%s/%s/contents", src.Owner, src.Repo)
+	} else {
+		baseAPIURL = fmt.Sprintf("https://%s/api/v3/repos/%s/%s/contents", src.Host, src.Owner, src.Repo)
+	}
+	if src.Ref != "" {
+		baseAPIURL += "?ref=" + src.Ref
+	}
+
+	includes, err := client.DiscoverSkillFiles(baseAPIURL, skillDir)
+	if err != nil {
+		fmt.Println(ui.Warning.Render(fmt.Sprintf("  Warning: couldn't fetch skill files for %s: %v", item.Name, err)))
+	}
+	return includes
+}
+
+// displayInstallSummary shows the final installation summary
+func displayInstallSummary(result installResult, src *source.Source) {
 	fmt.Println()
-	if len(installed) > 0 {
-		fmt.Println(ui.SuccessLine(fmt.Sprintf("Inscribed %d artifact(s)", len(installed))))
-		for _, name := range installed {
+	if len(result.installed) > 0 {
+		fmt.Println(ui.SuccessLine(fmt.Sprintf("Inscribed %d artifact(s)", len(result.installed))))
+		for _, name := range result.installed {
 			fmt.Println(ui.Muted.Render("    • " + name))
 		}
 	}
 
-	// Report skipped artifacts
-	if len(skipped) > 0 {
+	if len(result.skipped) > 0 {
 		fmt.Println()
-		fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipped %d artifact(s):", len(skipped))))
-		for _, s := range skipped {
+		fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipped %d artifact(s):", len(result.skipped))))
+		for _, s := range result.skipped {
 			fmt.Println(ui.Muted.Render(fmt.Sprintf("    • %s: %s", s.name, s.reason)))
 		}
 	}
 
-	// Exit with error if nothing was installed
-	if len(installed) == 0 {
+	if len(result.installed) == 0 {
 		exitWithError("no artifacts were installed successfully")
 	}
 
-	// Display detected requirements (from README + artifacts)
-	if len(allReqs) > 0 {
-		displayDetectedRequirements(src.String(), allReqs)
+	if len(result.allReqs) > 0 {
+		displayDetectedRequirements(src.String(), result.allReqs)
 	}
 
 	fmt.Println()
 	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
 
 	// Show usage info for installed skills
-	for _, skill := range skillContents {
+	for _, skill := range result.skillContents {
 		usage := extractUsageSection(skill.content)
 		if usage != "" {
 			fmt.Println()
 			fmt.Println(ui.Subtitle.Render(fmt.Sprintf("  Quick Start: %s", skill.name)))
 			fmt.Println(ui.Divider(50))
-			// Indent the usage text
 			for _, line := range strings.Split(usage, "\n") {
 				fmt.Println("  " + line)
 			}
