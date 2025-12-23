@@ -230,6 +230,10 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 
 	// Install each artifact
 	var installed []string
+	var skipped []struct {
+		name   string
+		reason string
+	}
 	var allReqs []detect.Requirement
 	var skillContents []struct {
 		name    string
@@ -244,12 +248,20 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 		content, err := client.FetchURL(url)
 		if err != nil {
 			fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipping %s: %v", item.Name, err)))
+			skipped = append(skipped, struct {
+				name   string
+				reason string
+			}{item.Name, fmt.Sprintf("fetch failed: %v", err)})
 			continue
 		}
 
 		art, err := parseArtifact(content, item.Name, url)
 		if err != nil {
 			fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipping %s: %v", item.Name, err)))
+			skipped = append(skipped, struct {
+				name   string
+				reason string
+			}{item.Name, fmt.Sprintf("parse failed: %v", err)})
 			continue
 		}
 
@@ -299,9 +311,25 @@ func learnFromGitHub(client *fetch.Client, src *source.Source, paths *config.Pat
 
 	// Summary
 	fmt.Println()
-	fmt.Println(ui.SuccessLine(fmt.Sprintf("Inscribed %d artifact(s)", len(installed))))
-	for _, name := range installed {
-		fmt.Println(ui.Muted.Render("    • " + name))
+	if len(installed) > 0 {
+		fmt.Println(ui.SuccessLine(fmt.Sprintf("Inscribed %d artifact(s)", len(installed))))
+		for _, name := range installed {
+			fmt.Println(ui.Muted.Render("    • " + name))
+		}
+	}
+
+	// Report skipped artifacts
+	if len(skipped) > 0 {
+		fmt.Println()
+		fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipped %d artifact(s):", len(skipped))))
+		for _, s := range skipped {
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("    • %s: %s", s.name, s.reason)))
+		}
+	}
+
+	// Exit with error if nothing was installed
+	if len(installed) == 0 {
+		exitWithError("no artifacts were installed successfully")
 	}
 
 	// Display detected requirements (from README + artifacts)
@@ -410,6 +438,10 @@ func learnFromLocal(src *source.Source, paths *config.Paths) {
 	}
 
 	var installed []string
+	var skipped []struct {
+		name   string
+		reason string
+	}
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -423,12 +455,20 @@ func learnFromLocal(src *source.Source, paths *config.Paths) {
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipping %s: %v", entry.Name(), err)))
+			skipped = append(skipped, struct {
+				name   string
+				reason string
+			}{entry.Name(), fmt.Sprintf("read failed: %v", err)})
 			continue
 		}
 
 		art, err := parseArtifact(content, entry.Name(), filePath)
 		if err != nil {
 			fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipping %s: %v", entry.Name(), err)))
+			skipped = append(skipped, struct {
+				name   string
+				reason string
+			}{entry.Name(), fmt.Sprintf("parse failed: %v", err)})
 			continue
 		}
 
@@ -437,8 +477,18 @@ func learnFromLocal(src *source.Source, paths *config.Paths) {
 		installed = append(installed, art.Name)
 	}
 
-	if len(installed) == 0 {
+	if len(installed) == 0 && len(skipped) == 0 {
 		exitWithError("no artifacts found in directory")
+	}
+
+	if len(installed) == 0 && len(skipped) > 0 {
+		// Found artifacts but all failed
+		fmt.Println()
+		fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipped %d artifact(s):", len(skipped))))
+		for _, s := range skipped {
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("    • %s: %s", s.name, s.reason)))
+		}
+		exitWithError("no artifacts were installed successfully")
 	}
 
 	// Summary
@@ -447,6 +497,16 @@ func learnFromLocal(src *source.Source, paths *config.Paths) {
 	for _, name := range installed {
 		fmt.Println(ui.Muted.Render("    • " + name))
 	}
+
+	// Report any skipped artifacts
+	if len(skipped) > 0 {
+		fmt.Println()
+		fmt.Println(ui.Warning.Render(fmt.Sprintf("  Skipped %d artifact(s):", len(skipped))))
+		for _, s := range skipped {
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("    • %s: %s", s.name, s.reason)))
+		}
+	}
+
 	fmt.Println()
 	fmt.Println(ui.Dim.Render("  Your tome grows stronger."))
 	fmt.Println(ui.PageFooter())

@@ -157,13 +157,23 @@ func outputJSON(query string, results []apropos.SearchResult) {
 		}
 	}
 
-	data, _ := json.MarshalIndent(out, "", "  ")
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		outputJSONError(fmt.Sprintf("failed to marshal results: %v", err))
+		return
+	}
 	fmt.Println(string(data))
 }
 
 func outputJSONError(msg string) {
 	out := map[string]string{"error": msg}
-	data, _ := json.Marshal(out)
+	data, err := json.Marshal(out)
+	if err != nil {
+		// Last resort fallback - manually construct JSON
+		fmt.Printf(`{"error": "failed to marshal error: %s"}`, msg)
+		fmt.Println()
+		return
+	}
 	fmt.Println(string(data))
 }
 
