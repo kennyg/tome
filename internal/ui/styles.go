@@ -9,6 +9,10 @@ import (
 	"github.com/charmbracelet/x/term"
 )
 
+// IsTTY indicates whether stdout is an interactive terminal.
+// When false, UI functions produce plain text without colors or decorations.
+var IsTTY = term.IsTerminal(os.Stdout.Fd())
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COLOR PALETTE - Ancient tome meets modern terminal
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -167,6 +171,11 @@ var (
 
 // Logo returns the stunning Tome logo
 func Logo() string {
+	// Plain output for non-TTY environments
+	if !IsTTY {
+		return "\n  TOME - Your Grimoire of AI Skills\n"
+	}
+
 	// Book/tome ASCII art with gradient coloring
 	lines := []struct {
 		text  string
@@ -200,6 +209,9 @@ func Logo() string {
 
 // LogoCompact returns a smaller logo for headers
 func LogoCompact() string {
+	if !IsTTY {
+		return "TOME"
+	}
 	book := lipgloss.NewStyle().Foreground(Bronze).Render("📖")
 	name := lipgloss.NewStyle().Foreground(Gold).Bold(true).Render("TOME")
 	return fmt.Sprintf(" %s %s ", book, name)
@@ -232,6 +244,11 @@ func Flourish() string {
 
 // SectionHeader creates a decorated section header
 func SectionHeader(title string, _ int) string {
+	// Plain output for non-TTY environments
+	if !IsTTY {
+		return fmt.Sprintf("=== %s ===", title)
+	}
+
 	// Use terminal width, capped at 80
 	width := TerminalWidth()
 	if width > 80 {
@@ -471,6 +488,11 @@ func PageHeader(title string) string {
 
 // PageFooter creates a consistent page footer matching the header width
 func PageFooter() string {
+	// Plain output for non-TTY environments
+	if !IsTTY {
+		return "\n"
+	}
+
 	width := TerminalWidth()
 	if width > 80 {
 		width = 80
