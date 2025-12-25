@@ -29,6 +29,9 @@ jobs:
         with:
           cosign-release: 'v2.4.1'
 
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@fc46e51bf9ebbba4b8e800e0e3d53ec623321021  # v0.18.4
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@026299872805cb2db698e02dd7fb506a4da5122d  # v6.2.0
         with:
