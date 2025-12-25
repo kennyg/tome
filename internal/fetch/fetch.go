@@ -170,16 +170,6 @@ func appendPath(baseURL, segment string) string {
 	return base + "/" + segment + query
 }
 
-// agentSkillDirs are directories where different AI agents store skills
-var agentSkillDirs = []string{
-	artifact.SkillsDirName,                      // Generic/tome standard
-	".agent/" + artifact.SkillsDirName,          // agentskills.io standard
-	".github/" + artifact.SkillsDirName,         // GitHub Copilot
-	".claude/" + artifact.SkillsDirName,         // Claude Code
-	".opencode/" + artifact.SkillsDirName,       // OpenCode
-	".cursor/" + artifact.SkillsDirName,         // Cursor
-}
-
 // FindArtifacts finds all artifact files in a GitHub directory using strict rules.
 //
 // Strict artifact discovery rules:
