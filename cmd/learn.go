@@ -562,10 +562,6 @@ func installArtifactQuiet(art *artifact.Artifact, paths *config.Paths) {
 	installArtifactQuietWithExtras(art, paths, nil, nil)
 }
 
-func installArtifactQuietWithIncludes(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile) {
-	installArtifactQuietWithExtras(art, paths, includes, nil)
-}
-
 func installArtifactQuietWithExtras(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile, extraReqs []detect.Requirement) []detect.Requirement {
 	reqs := doInstallWithExtraReqs(art, paths, includes, extraReqs)
 
@@ -576,10 +572,6 @@ func installArtifactQuietWithExtras(art *artifact.Artifact, paths *config.Paths,
 	}
 	fmt.Printf("  %s %s\n", badge, ui.Highlight.Render(name))
 	return reqs
-}
-
-func doInstall(art *artifact.Artifact, paths *config.Paths) []detect.Requirement {
-	return doInstallWithExtraReqs(art, paths, nil, nil)
 }
 
 func doInstallWithExtraReqs(art *artifact.Artifact, paths *config.Paths, includes []fetch.IncludedFile, extraReqs []detect.Requirement) []detect.Requirement {
