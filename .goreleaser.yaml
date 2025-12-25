@@ -39,9 +39,11 @@ checksum:
   algorithm: sha256
 
 sboms:
-  - artifacts: source
+  - artifacts: binary
+    ids:
+      - tome
     documents:
-      - "{{ .ProjectName }}_{{ .Version }}_sbom.spdx.json"
+      - "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}_sbom.spdx.json"
 
 signs:
   - cmd: cosign
