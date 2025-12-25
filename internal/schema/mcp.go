@@ -9,17 +9,17 @@ import (
 // MCPServer represents a single MCP server configuration
 // This is the canonical internal representation used for conversion
 type MCPServer struct {
-	Name        string            `json:"-"`                       // Server name (used as key)
-	Command     string            `json:"command,omitempty"`       // Executable command
-	Args        []string          `json:"args,omitempty"`          // Command arguments
-	Env         map[string]string `json:"env,omitempty"`           // Environment variables
-	Type        string            `json:"type,omitempty"`          // "local" or "remote" (OpenCode)
-	URL         string            `json:"url,omitempty"`           // Remote server URL (OpenCode)
-	Headers     map[string]string `json:"headers,omitempty"`       // HTTP headers (OpenCode remote)
-	Enabled     *bool             `json:"enabled,omitempty"`       // Enabled state (OpenCode)
-	Disabled    bool              `json:"disabled,omitempty"`      // Disabled state (Claude)
-	Timeout     int               `json:"timeout,omitempty"`       // Timeout in seconds
-	Description string            `json:"description,omitempty"`   // Optional description
+	Name        string            `json:"-"`                     // Server name (used as key)
+	Command     string            `json:"command,omitempty"`     // Executable command
+	Args        []string          `json:"args,omitempty"`        // Command arguments
+	Env         map[string]string `json:"env,omitempty"`         // Environment variables
+	Type        string            `json:"type,omitempty"`        // "local" or "remote" (OpenCode)
+	URL         string            `json:"url,omitempty"`         // Remote server URL (OpenCode)
+	Headers     map[string]string `json:"headers,omitempty"`     // HTTP headers (OpenCode remote)
+	Enabled     *bool             `json:"enabled,omitempty"`     // Enabled state (OpenCode)
+	Disabled    bool              `json:"disabled,omitempty"`    // Disabled state (Claude)
+	Timeout     int               `json:"timeout,omitempty"`     // Timeout in seconds
+	Description string            `json:"description,omitempty"` // Optional description
 }
 
 // MCPConfig represents a collection of MCP servers
@@ -93,7 +93,7 @@ type CopilotMCPServer struct {
 // CopilotMCPInput represents an input placeholder for secrets
 type CopilotMCPInput struct {
 	ID          string `json:"id"`
-	Type        string `json:"type,omitempty"`        // "promptString"
+	Type        string `json:"type,omitempty"` // "promptString"
 	Description string `json:"description,omitempty"`
 	Password    bool   `json:"password,omitempty"`
 }
@@ -395,7 +395,7 @@ func ConvertMCPWithInfo(config *MCPConfig, targetFormat Format) (*MCPConversionR
 				result.Warnings = append(result.Warnings,
 					fmt.Sprintf("server %q: remote URL not supported in %s (will be omitted)", name, targetFormat))
 			}
-			if server.Headers != nil && len(server.Headers) > 0 {
+			if len(server.Headers) > 0 {
 				result.Warnings = append(result.Warnings,
 					fmt.Sprintf("server %q: headers not supported in %s (will be omitted)", name, targetFormat))
 			}
