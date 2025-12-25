@@ -202,7 +202,7 @@ func transmogrifyMCPFile(path string, content []byte, targetFormat schema.Format
 		exitWithError(fmt.Sprintf("failed to parse MCP config: %v", err))
 	}
 
-	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Type: MCP configuration")))
+	fmt.Println(ui.Muted.Render("  Type: MCP configuration"))
 	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Detected format: %s", config.GetFormat())))
 	fmt.Println(ui.Muted.Render(fmt.Sprintf("  Servers: %d", len(config.Servers))))
 	fmt.Println()
