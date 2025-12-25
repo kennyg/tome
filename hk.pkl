@@ -1,28 +1,67 @@
-amends "package://github.com/steveyegge/hk/hk@0.1.4#/Hook.pkl"
+amends "package://github.com/jdx/hk/releases/download/v1.28.0/hk@1.28.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.28.0/hk@1.28.0#/Builtins.pkl"
 
-preCommit {
-    builtin {
-        ["no-large-files"] {
-            args { "--maxkb"; "500" }
-        }
+local linters = new Mapping<String, Step> {
+    // Go formatting
+    ["gofmt"] {
+        glob = "*.go"
+        check = "gofmt -l {{files}}"
+        fix = "gofmt -w {{files}}"
     }
-    commands {
-        ["go-fmt"] {
-            run = "go fmt ./..."
-        }
-        ["go-vet"] {
-            run = "go vet ./..."
-        }
+    
+    // Go vet
+    ["govet"] {
+        glob = "*.go"
+        check = "go vet ./..."
+        exclusive = true
     }
 }
 
-prePush {
-    commands {
-        ["go-test"] {
-            run = "go test ./..."
+hooks {
+    ["pre-commit"] {
+        fix = true    // automatically modify files with available linter fixes
+        stash = "git" // stashes unstaged changes while running fix steps
+        steps {
+            // "prelint" here is simply a name to define the step
+            ["prelint"] {
+                // if a step has a "check" script it will execute that
+                check = "mise run prelint"
+                exclusive = true // ensures that the step runs in isolation
+            }
+            ...linters // add all linters defined above
+            ["postlint"] {
+                check = "mise run postlint"
+                exclusive = true
+            }
         }
-        ["go-build"] {
-            run = "go build ."
+    }
+    // pre-push runs tests and security checks
+    ["pre-push"] {
+        steps {
+            ["test"] {
+                check = "go test ./..."
+                exclusive = true
+            }
+            ["build"] {
+                check = "go build ."
+                exclusive = true
+            }
+            ["govulncheck"] {
+                check = "go run golang.org/x/vuln/cmd/govulncheck@latest ./..."
+                exclusive = true
+            }
+            ["staticcheck"] {
+                check = "go run honnef.co/go/tools/cmd/staticcheck@latest ./..."
+                exclusive = true
+            }
         }
+    }
+    // "fix" and "check" are special steps for `hk fix` and `hk check` commands
+    ["fix"] {
+        fix = true
+        steps = linters
+    }
+    ["check"] {
+        steps = linters
     }
 }

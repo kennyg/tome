@@ -1,6 +1,8 @@
 [tools]
 go = "1.24"
 goreleaser = "2.13.2"
+hk = "1.28.0"
+pkl = "latest"
 
 [env]
 GOBIN = "{{config_root}}/bin"
@@ -24,6 +26,40 @@ run = "golangci-lint run"
 [tasks.fmt]
 description = "Format code"
 run = "go fmt ./..."
+
+[tasks.check]
+description = "Run all checks (fmt, vet, test, security)"
+run = """
+#!/usr/bin/env bash
+set -e
+echo "Running go fmt..."
+go fmt ./...
+echo "Running go vet..."
+go vet ./...
+echo "Running tests..."
+go test ./...
+echo "Running govulncheck..."
+command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
+govulncheck ./...
+echo "Running staticcheck..."
+command -v staticcheck >/dev/null 2>&1 || go install honnef.co/go/tools/cmd/staticcheck@latest
+staticcheck ./...
+echo "✅ All checks passed!"
+"""
+
+[tasks.security]
+description = "Run security checks (govulncheck + staticcheck)"
+run = """
+#!/usr/bin/env bash
+set -e
+echo "Running govulncheck..."
+command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
+govulncheck ./...
+echo "Running staticcheck..."
+command -v staticcheck >/dev/null 2>&1 || go install honnef.co/go/tools/cmd/staticcheck@latest
+staticcheck ./...
+echo "✅ Security checks passed!"
+"""
 
 [tasks.install]
 description = "Install tome to GOBIN"
