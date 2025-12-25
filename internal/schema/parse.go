@@ -19,10 +19,7 @@ func ParseFrontmatter(content []byte) (map[string]interface{}, string, error) {
 	}
 
 	// Find the closing delimiter
-	rest := text[3:]
-	if strings.HasPrefix(rest, "\n") {
-		rest = rest[1:]
-	}
+	rest := strings.TrimPrefix(text[3:], "\n")
 
 	idx := strings.Index(rest, "\n---")
 	if idx == -1 {
@@ -51,10 +48,7 @@ func ParseFrontmatterTyped[T any](content []byte, target *T) (string, error) {
 	}
 
 	// Find the closing delimiter
-	rest := text[3:]
-	if strings.HasPrefix(rest, "\n") {
-		rest = rest[1:]
-	}
+	rest := strings.TrimPrefix(text[3:], "\n")
 
 	idx := strings.Index(rest, "\n---")
 	if idx == -1 {
