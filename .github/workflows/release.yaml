@@ -30,7 +30,7 @@ jobs:
           cosign-release: 'v2.4.1'
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@9c0dbb9deaa723a736af0e80068aea6e0f8e265e  # v6.2.0
+        uses: goreleaser/goreleaser-action@026299872805cb2db698e02dd7fb506a4da5122d  # v6.2.0
         with:
           distribution: goreleaser
           version: v2.13.2
