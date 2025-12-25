@@ -1,6 +1,6 @@
 module github.com/kennyg/tome
 
-go 1.24.5
+go 1.24.11
 
 require (
 	github.com/charmbracelet/lipgloss v1.1.0
