@@ -25,6 +25,7 @@ var (
 	listCommands bool
 	listPrompts  bool
 	listHooks    bool
+	listShort    bool
 )
 
 func init() {
@@ -32,6 +33,7 @@ func init() {
 	listCmd.Flags().BoolVar(&listCommands, "commands", false, "Show only commands")
 	listCmd.Flags().BoolVar(&listPrompts, "prompts", false, "Show only prompts")
 	listCmd.Flags().BoolVar(&listHooks, "hooks", false, "Show only hooks")
+	listCmd.Flags().BoolVar(&listShort, "short", false, "Truncate descriptions to one line")
 }
 
 // artifactWithLocation tracks an artifact and where it's from
@@ -171,16 +173,25 @@ func runList(cmd *cobra.Command, args []string) {
 				name = lipgloss.NewStyle().Foreground(ui.DarkGray).Render(a.Name)
 			}
 
-			desc := ui.Truncate(a.Description, descWidth)
-			var descStyled string
-			if a.InEffect {
-				descStyled = lipgloss.NewStyle().Foreground(ui.Gray).Render(desc)
-			} else {
-				descStyled = lipgloss.NewStyle().Foreground(ui.DarkGray).Render(desc)
+			fmt.Printf("    %s %s%s\n", name, locTag, setupTag)
+
+			// Display description: wrap if --full, truncate otherwise
+			descStyle := lipgloss.NewStyle().Foreground(ui.Gray)
+			if !a.InEffect {
+				descStyle = lipgloss.NewStyle().Foreground(ui.DarkGray)
 			}
 
-			fmt.Printf("    %s %s%s\n", name, locTag, setupTag)
-			fmt.Printf("    %s\n", descStyled)
+			if listShort {
+				// Truncate to single line
+				desc := ui.Truncate(a.Description, descWidth)
+				fmt.Printf("    %s\n", descStyle.Render(desc))
+			} else {
+				// Wrap description to multiple lines (default)
+				lines := ui.WrapText(a.Description, descWidth, "    ")
+				for _, line := range lines {
+					fmt.Printf("    %s\n", descStyle.Render(line))
+				}
+			}
 			fmt.Println()
 		}
 	}

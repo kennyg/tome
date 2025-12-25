@@ -527,6 +527,41 @@ func Truncate(text string, max int) string {
 	return text[:max-3] + "..."
 }
 
+// WrapText wraps text to fit within maxWidth, returning multiple lines.
+// Each line is indented with the given prefix (typically spaces).
+func WrapText(text string, maxWidth int, indent string) []string {
+	if maxWidth <= 0 {
+		return []string{text}
+	}
+
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return nil
+	}
+
+	var lines []string
+	var currentLine strings.Builder
+
+	for _, word := range words {
+		if currentLine.Len() == 0 {
+			currentLine.WriteString(word)
+		} else if currentLine.Len()+1+len(word) <= maxWidth {
+			currentLine.WriteString(" ")
+			currentLine.WriteString(word)
+		} else {
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+			currentLine.WriteString(word)
+		}
+	}
+
+	if currentLine.Len() > 0 {
+		lines = append(lines, currentLine.String())
+	}
+
+	return lines
+}
+
 // Render applies a lipgloss style to text, returning plain text in non-TTY environments.
 // Use this wrapper when you want TTY-aware styling.
 func Render(style lipgloss.Style, text string) string {
