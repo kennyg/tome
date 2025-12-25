@@ -70,8 +70,56 @@ mise run test               # Run all tests
 mise run fmt                # Format code
 mise run lint               # Run linter (requires golangci-lint)
 
+# Security
+mise run security           # Run govulncheck + staticcheck
+mise run check              # Run all checks (fmt, vet, test, security)
+
 # Install locally
 mise run install            # Install to GOBIN
+```
+
+## Git Hooks (hk)
+
+This project uses **hk** for git hook management. Hooks are defined in `hk.pkl`.
+
+### Setup
+
+Install hk and pkl via Homebrew:
+```bash
+brew install hk pkl
+hk install  # Install git hooks
+```
+
+Or via mise (alternative):
+```bash
+mise install
+mise exec -- hk install
+```
+
+### Hooks Configured
+
+**Pre-commit:**
+- `go fmt` - Auto-format code
+- `go vet` - Static analysis
+
+**Pre-push:**
+- `go test ./...` - All tests must pass
+- `go build .` - Build must succeed
+- `govulncheck ./...` - No vulnerabilities allowed
+- `staticcheck ./...` - Code quality checks
+
+### Testing Hooks Manually
+
+```bash
+hk run pre-commit  # Test pre-commit hooks
+hk run pre-push    # Test pre-push hooks
+```
+
+### Bypass Hooks (when needed)
+
+```bash
+git push --no-verify  # Skip all hooks
+HK=0 git push         # Disable hk specifically
 ```
 
 ## Releasing
