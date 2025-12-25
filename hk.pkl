@@ -35,11 +35,11 @@ hooks {
                 exclusive = true
             }
             ["govulncheck"] {
-                check = "go run golang.org/x/vuln/cmd/govulncheck@latest ./..."
+                check = "command -v govulncheck >/dev/null 2>&1 && govulncheck ./... || go run golang.org/x/vuln/cmd/govulncheck@latest ./..."
                 exclusive = true
             }
             ["staticcheck"] {
-                check = "go run honnef.co/go/tools/cmd/staticcheck@latest ./..."
+                check = "command -v staticcheck >/dev/null 2>&1 && staticcheck ./... || go run honnef.co/go/tools/cmd/staticcheck@latest ./..."
                 exclusive = true
             }
         }

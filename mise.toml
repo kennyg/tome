@@ -37,11 +37,19 @@ go vet ./...
 echo "Running tests..."
 go test ./...
 echo "Running govulncheck..."
-command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
-govulncheck ./...
+if command -v govulncheck >/dev/null 2>&1; then
+  govulncheck ./...
+else
+  echo "  (using go run, install via: brew install govulncheck)"
+  go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+fi
 echo "Running staticcheck..."
-command -v staticcheck >/dev/null 2>&1 || go install honnef.co/go/tools/cmd/staticcheck@latest
-staticcheck ./...
+if command -v staticcheck >/dev/null 2>&1; then
+  staticcheck ./...
+else
+  echo "  (using go run, install via: brew install staticcheck)"
+  go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+fi
 echo "✅ All checks passed!"
 """
 
@@ -51,11 +59,19 @@ run = """
 #!/usr/bin/env bash
 set -e
 echo "Running govulncheck..."
-command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
-govulncheck ./...
+if command -v govulncheck >/dev/null 2>&1; then
+  govulncheck ./...
+else
+  echo "  (using go run, install via: brew install govulncheck)"
+  go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+fi
 echo "Running staticcheck..."
-command -v staticcheck >/dev/null 2>&1 || go install honnef.co/go/tools/cmd/staticcheck@latest
-staticcheck ./...
+if command -v staticcheck >/dev/null 2>&1; then
+  staticcheck ./...
+else
+  echo "  (using go run, install via: brew install staticcheck)"
+  go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+fi
 echo "✅ Security checks passed!"
 """
 

@@ -84,9 +84,9 @@ This project uses **hk** for git hook management. Hooks are defined in `hk.pkl`.
 
 ### Setup
 
-Install hk and pkl via Homebrew:
+Install hk, pkl, and security tools via Homebrew (recommended):
 ```bash
-brew install hk pkl
+brew install hk pkl govulncheck staticcheck
 hk install  # Install git hooks
 ```
 
@@ -95,6 +95,8 @@ Or via mise (alternative):
 mise install
 mise exec -- hk install
 ```
+
+**Note:** The hooks will use Homebrew-installed tools if available (faster), otherwise they'll fall back to `go run` (slower but works without installation).
 
 ### Hooks Configured
 
