@@ -113,7 +113,7 @@ func TestIsScriptFile(t *testing.T) {
 		{"script.js", true},
 		{"script.ts", true},
 		{"script.rb", true},
-		{"SCRIPT.PY", true},  // case insensitive
+		{"SCRIPT.PY", true}, // case insensitive
 		{"readme.md", false},
 		{"config.yaml", false},
 		{"data.json", false},
@@ -239,6 +239,55 @@ func TestIsArtifactFile(t *testing.T) {
 			got := IsArtifactFile(tt.filename)
 			if got != tt.want {
 				t.Errorf("IsArtifactFile(%q) = %v, want %v", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsExcludedFile(t *testing.T) {
+	tests := []struct {
+		filename string
+		want     bool
+	}{
+		// Meta/documentation files should be excluded
+		{"README.md", true},
+		{"readme.md", true},
+		{"LICENSE.md", true},
+		{"licence.md", true},
+		{"CHANGELOG.md", true},
+		{"CONTRIBUTING.md", true},
+		{"AGENTS.md", true},
+		{"CLAUDE.md", true},
+		{"OPENCODE.md", true},
+		{"THIRD_PARTY_NOTICES.md", true},
+		{"CODE_OF_CONDUCT.md", true},
+		{"SECURITY.md", true},
+		{"SUPPORT.md", true},
+		{"AUTHORS.md", true},
+		{"CONTRIBUTORS.md", true},
+		{"MANIFEST.md", true},
+
+		// Case insensitivity
+		{"Readme.md", true},
+		{"ReadMe.MD", true},
+
+		// Actual commands/artifacts should NOT be excluded
+		{"commit.md", false},
+		{"review-pr.md", false},
+		{"custom-command.md", false},
+		{"my-skill.md", false},
+		{"SKILL.md", false},
+
+		// Non-markdown files (not excluded by this function, handled elsewhere)
+		{"script.py", false},
+		{"config.yaml", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.filename, func(t *testing.T) {
+			got := isExcludedFile(tt.filename)
+			if got != tt.want {
+				t.Errorf("isExcludedFile(%q) = %v, want %v", tt.filename, got, tt.want)
 			}
 		})
 	}

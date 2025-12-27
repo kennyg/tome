@@ -244,6 +244,10 @@ func (c *Client) scanMarkdownDir(apiURL string, dirName string, artifacts *[]Git
 
 	for _, sub := range subContents {
 		if sub.Type == "file" && strings.HasSuffix(strings.ToLower(sub.Name), ".md") {
+			// Skip meta/documentation files that shouldn't be artifacts
+			if isExcludedFile(sub.Name) {
+				continue
+			}
 			*artifacts = append(*artifacts, sub)
 		}
 	}
@@ -719,6 +723,37 @@ func DetectArtifactType(filename string) artifact.Type {
 // (docs, workflows, planning docs) from being treated as artifacts.
 func IsArtifactFile(filename string) bool {
 	return strings.EqualFold(filepath.Base(filename), artifact.SkillFilename)
+}
+
+// excludedFiles contains markdown files that should never be treated as artifacts.
+// These are documentation, legal, and meta files that shouldn't be installed as commands.
+var excludedFiles = map[string]bool{
+	"readme.md":              true,
+	"license.md":             true,
+	"licence.md":             true,
+	"changelog.md":           true,
+	"contributing.md":        true,
+	"agents.md":              true,
+	"claude.md":              true,
+	"opencode.md":            true,
+	"third_party_notices.md": true,
+	"code_of_conduct.md":     true,
+	"security.md":            true,
+	"support.md":             true,
+	"authors.md":             true,
+	"contributors.md":        true,
+	"history.md":             true,
+	"copying.md":             true,
+	"todo.md":                true,
+	"notes.md":               true,
+	"manifest.md":            true,
+}
+
+// isExcludedFile returns true if the filename is a meta/documentation file
+// that should not be treated as an artifact (command, agent, prompt, etc.)
+func isExcludedFile(filename string) bool {
+	lower := strings.ToLower(filepath.Base(filename))
+	return excludedFiles[lower]
 }
 
 // CommandNameFromFile extracts a command name from a filename

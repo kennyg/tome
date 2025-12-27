@@ -63,6 +63,13 @@ func runSync(cmd *cobra.Command, args []string) {
 		// Determine the URL to fetch
 		var fetchURL string
 
+		// Check if this is a local source (by source field or source_url)
+		if isLocalPath(a.SourceURL) || isLocalPath(a.Source) {
+			fmt.Println(ui.Muted.Render("↷ local"))
+			unchanged++
+			continue
+		}
+
 		// Prefer stored source_url if available
 		if a.SourceURL != "" {
 			// Strip any token params from URL (they expire)
@@ -172,4 +179,25 @@ func stripTokenFromURL(url string) string {
 		return url[:idx]
 	}
 	return url
+}
+
+// isLocalPath returns true if the path looks like a local filesystem path
+// rather than a URL or GitHub shorthand
+func isLocalPath(path string) bool {
+	if path == "" {
+		return false
+	}
+	// Absolute paths
+	if strings.HasPrefix(path, "/") {
+		return true
+	}
+	// Relative paths
+	if strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
+		return true
+	}
+	// Windows paths (e.g., C:\...)
+	if len(path) >= 2 && path[1] == ':' {
+		return true
+	}
+	return false
 }
