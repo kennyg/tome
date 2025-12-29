@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -49,21 +50,59 @@ func runRemove(cmd *cobra.Command, args []string) {
 
 	badge := getBadge(artifact.Type)
 	fmt.Printf("  %s %s\n", badge, ui.Highlight.Render(artifact.Name))
-	fmt.Println(ui.Muted.Render(fmt.Sprintf("    Path: %s", artifact.LocalPath)))
-	fmt.Println()
 
-	// Remove the file from disk
-	if err := os.Remove(artifact.LocalPath); err != nil && !os.IsNotExist(err) {
-		exitWithError(fmt.Sprintf("failed to remove file: %v", err))
+	// Determine what to remove based on artifact type and path structure
+	pathToRemove := artifact.LocalPath
+	isDirectory := false
+	isSymlink := false
+
+	if artifact.Type == artifactPkg.TypeSkill {
+		// Skills can be:
+		// 1. Directory-based: skills/<name>/SKILL.md -> remove the directory
+		// 2. Symlinks: skills/<name> -> target -> remove the symlink only
+		// 3. Flat files: skills/<name>.md -> remove the file
+		parentDir := filepath.Dir(artifact.LocalPath)
+		filename := filepath.Base(artifact.LocalPath)
+
+		// Check if the parent directory is the skill's own directory (not the main skills dir)
+		if parentDir != paths.SkillsDir && strings.HasSuffix(filename, ".md") {
+			// Check if parent is a symlink
+			if info, err := os.Lstat(parentDir); err == nil {
+				if info.Mode()&os.ModeSymlink != 0 {
+					// It's a symlink - remove just the symlink, not the target
+					pathToRemove = parentDir
+					isSymlink = true
+					// Note: os.Remove handles symlinks correctly (removes link, not target)
+				} else if info.IsDir() {
+					// It's a real directory - remove the whole thing
+					pathToRemove = parentDir
+					isDirectory = true
+				}
+			}
+		}
 	}
 
-	// For skills, also try to remove the parent directory if empty
-	if artifact.Type == artifactPkg.TypeSkill {
-		parentDir := filepath.Dir(artifact.LocalPath)
-		// Only remove if it's a skill-specific directory (not the main skills dir)
-		if parentDir != paths.SkillsDir {
-			_ = os.Remove(parentDir) // Ignore error - dir may not be empty
-		}
+	// Show what we're actually removing
+	if isSymlink {
+		target, _ := os.Readlink(pathToRemove)
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    Symlink: %s → %s", pathToRemove, target)))
+	} else if isDirectory {
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    Directory: %s", pathToRemove)))
+	} else {
+		fmt.Println(ui.Muted.Render(fmt.Sprintf("    File: %s", pathToRemove)))
+	}
+	fmt.Println()
+
+	// Remove from disk
+	var removeErr error
+	if isDirectory {
+		removeErr = os.RemoveAll(pathToRemove)
+	} else {
+		removeErr = os.Remove(pathToRemove)
+	}
+
+	if removeErr != nil && !os.IsNotExist(removeErr) {
+		exitWithError(fmt.Sprintf("failed to remove %s: %v", pathToRemove, removeErr))
 	}
 
 	// Update state
