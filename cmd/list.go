@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -46,6 +47,12 @@ type artifactWithLocation struct {
 func runList(cmd *cobra.Command, args []string) {
 	agent := config.DefaultAgent()
 
+	// Get the current agent's directory to filter artifacts
+	globalPaths, err := config.GetPathsForAgent(agent)
+	if err != nil {
+		exitWithError(err.Error())
+	}
+
 	// Collect artifacts from both locations
 	var allArtifacts []artifactWithLocation
 	seenNames := make(map[string]bool) // track which names we've seen (for in-effect logic)
@@ -69,18 +76,19 @@ func runList(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Then load global artifacts
-	globalPaths, err := config.GetPathsForAgent(agent)
-	if err != nil {
-		exitWithError(err.Error())
-	}
-
+	// Then load global artifacts (filtering to current agent only)
 	globalState, err := config.LoadState(globalPaths.StateFile)
 	if err != nil {
 		exitWithError(err.Error())
 	}
 
 	for _, a := range globalState.Installed {
+		// Filter: only show artifacts installed for the current agent
+		// by checking if the local_path is within the agent's directory
+		if !isPathForAgent(a.LocalPath, globalPaths.AgentDir) {
+			continue
+		}
+
 		key := fmt.Sprintf("%s:%s", a.Type, a.Name)
 		inEffect := !seenNames[key] // only in effect if not shadowed by local
 		allArtifacts = append(allArtifacts, artifactWithLocation{
@@ -238,4 +246,10 @@ func getBadge(t artifact.Type) string {
 	default:
 		return ""
 	}
+}
+
+// isPathForAgent checks if a local_path belongs to the given agent directory
+func isPathForAgent(localPath, agentDir string) bool {
+	// Normalize paths for comparison
+	return strings.HasPrefix(localPath, agentDir+"/") || strings.HasPrefix(localPath, agentDir+"\\")
 }
