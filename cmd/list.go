@@ -70,6 +70,11 @@ func runList(cmd *cobra.Command, args []string) {
 			localState, err := config.LoadState(localPaths.StateFile)
 			if err == nil {
 				for _, a := range localState.Installed {
+					// Filter: only show artifacts installed for the current agent
+					if !isPathForAgent(a.LocalPath, globalPaths.AgentDir) {
+						continue
+					}
+
 					key := fmt.Sprintf("%s:%s", a.Type, a.Name)
 					seenNames[key] = true
 					allArtifacts = append(allArtifacts, artifactWithLocation{
