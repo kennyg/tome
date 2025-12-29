@@ -1,23 +1,40 @@
 # Tome
 
-**Your AI coding agents just got superpowers.**
+**Write once, use everywhere.**
 
-Tome is the skill manager for AI coding agents. Install prompts, commands, and workflows from across GitHub in seconds. Build collections. Share knowledge. Make your AI assistant actually know what you need it to know.
+Tome is a format converter and skill manager for AI coding agents. Write your prompts, skills, and MCP configs once—then convert them to work with Claude Code, OpenCode, GitHub Copilot, Cursor, and more.
 
-Stop copy-pasting prompts. Start wielding a grimoire of battle-tested skills.
+Stop maintaining parallel config files. Start using one source of truth.
 
-## Why Tome?
+## The Problem
 
-Your AI coding agent is brilliant, but it doesn't know your stack, your patterns, or your team's conventions. Until now, you've been pasting the same context into every conversation. There's a better way.
+You use multiple AI coding agents. Each has its own format:
 
-**Tome lets you:**
-- **Install skills instantly** from any GitHub repo with one command
-- **Discover proven prompts** from the community with powerful search
-- **Keep everything synced** as collections evolve and improve
-- **Build your own grimoire** of team knowledge and best practices
-- **Support every agent** - Claude Code, Cursor, Windsurf, and more
+| Agent | Skills | Commands | MCP Config |
+|-------|--------|----------|------------|
+| Claude Code | `.claude/skills/*/SKILL.md` | `.claude/commands/*.md` | `.mcp.json` |
+| OpenCode | `.opencode/skill/*/SKILL.md` | `.opencode/commands/*.md` | `opencode.json` |
+| Copilot | `agents/*.agent.md` | `.github/prompts/*.prompt.md` | — |
+| Cursor | `.cursor/rules/*.md` | — | `.cursor/mcp.json` |
 
-Think of it as package management for AI agent knowledge. `npm install` for prompts.
+Maintaining the same knowledge across all of them? That's busywork.
+
+## The Solution
+
+```bash
+# Convert a Copilot agent to Claude format
+tome transmogrify agents/CSharp.agent.md --to claude
+
+# Convert an entire directory
+tome transmogrify ./copilot-skills/ --to opencode --output ./converted/
+
+# Convert MCP configs between formats
+tome transmogrify .mcp.json --to opencode
+tome transmogrify opencode.json --to claude
+
+# Preview before converting
+tome transmogrify ./skills/ --to cursor --dry-run
+```
 
 ## Installation
 
@@ -33,51 +50,73 @@ brew install kennyg/tap/tome
 go install github.com/kennyg/tome@latest
 ```
 
-### GitHub Token (Optional)
-
-Tome works without authentication for public repositories. For higher rate limits (5000 vs 60 requests/hour) or private repos, set a GitHub token:
-
-```bash
-export GITHUB_TOKEN=ghp_your_token_here
-```
-
-Tome automatically discovers tokens from `GITHUB_TOKEN`, `GH_TOKEN`, or your gh CLI config.
-
 ## Quick Start
 
-Install your first skill collection:
+### Converting Between Formats
 
 ```bash
-# Install Yegge's famous programming tips as agent prompts
+# You have Copilot skills, want them in Claude
+tome transmogrify agents/ --to claude
+
+# You have Claude skills, want them in Cursor
+tome transmogrify .claude/skills/ --to cursor
+
+# Convert a single file
+tome transmogrify my-skill.agent.md --to opencode
+```
+
+### Installing Skills from GitHub
+
+```bash
+# Install a skill collection
 tome learn kennyg/yegges-tips
 
-# Search for React best practices
-tome seek "react patterns"
-
-# See what you've learned
+# See what you've installed
 tome index
 
-# Keep everything up to date
+# Keep everything updated
 tome renew
 ```
 
-That's it. Your AI agent now has access to curated, versioned knowledge.
+### Discovering Skills
+
+```bash
+# Search GitHub for skills
+tome seek "react patterns"
+
+# Preview before installing
+tome peek owner/repo
+```
 
 ## Commands
 
-Tome uses a grimoire-inspired command vocabulary (with practical aliases):
+### Transmogrify (Convert)
 
-### Learn New Skills
+The core feature. Convert skills, commands, and MCP configs between agent formats.
+
+```bash
+tome transmogrify <source> --to <format>
+```
+
+**Supported formats:** `claude`, `opencode`, `copilot`, `cursor`
+
+**Supported artifact types:**
+- Skills (SKILL.md, .agent.md, rules)
+- Commands (.prompt.md, commands/*.md)
+- MCP configs (.mcp.json, opencode.json)
+
+*Aliases: `convert`, `morph`, `xform`*
+
+### Learn (Install)
 
 ```bash
 tome learn owner/repo           # Install from GitHub
-tome learn owner/repo@branch    # Install specific branch
-tome learn owner/repo --path custom/location
+tome learn owner/repo@branch    # Specific branch
 ```
 
 *Aliases: `inscribe`, `add`, `install`*
 
-### Browse Your Collection
+### Index (List)
 
 ```bash
 tome index                      # List all installed artifacts
@@ -86,33 +125,23 @@ tome index --agent claude       # Filter by agent
 
 *Aliases: `list`, `ls`*
 
-### Search for Skills
+### Seek (Search)
 
 ```bash
 tome seek "typescript testing"  # Find skills on GitHub
-tome seek cursor --stars 100    # Filter by popularity
 ```
 
 *Aliases: `search`, `find`*
 
-### Preview Before Installing
+### Renew (Update)
 
 ```bash
-tome peek owner/repo            # See what's in a collection
-tome peek owner/repo:path       # Preview a specific skill
+tome renew                      # Sync all installed skills
 ```
 
-*Aliases: `preview`, `inspect`*
+*Aliases: `sync`, `update`*
 
-### Inspect Details
-
-```bash
-tome study owner/repo           # View artifact information
-```
-
-*Aliases: `info`, `examine`*
-
-### Remove Skills
+### Forget (Remove)
 
 ```bash
 tome forget owner/repo          # Uninstall artifacts
@@ -120,98 +149,32 @@ tome forget owner/repo          # Uninstall artifacts
 
 *Aliases: `remove`, `rm`*
 
-### Update Everything
-
-```bash
-tome renew                      # Sync all installed skills
-tome renew owner/repo           # Update specific collection
-```
-
-*Aliases: `sync`, `update`*
-
-### Create Your Own Collection
-
-```bash
-tome conjure my-team-skills     # Initialize new collection
-cd my-team-skills
-# Add your .md files and prompts
-tome bind                       # Validate the collection
-```
-
-*Conjure aliases: `init`*
-*Bind aliases: `build`, `validate`*
-
-## Creating Collections
-
-Sharing knowledge with your team (or the world) is simple:
-
-1. **Initialize a collection:**
-   ```bash
-   tome conjure my-awesome-skills
-   cd my-awesome-skills
-   ```
-
-2. **Add your skills:**
-   Create markdown files with prompts, commands, or documentation. Organize them however you like.
-
-3. **Define the manifest:**
-   Edit `tome.yaml` to describe your collection:
-   ```yaml
-   name: my-awesome-skills
-   description: Our team's AI agent skills
-   author: your-name
-   agents:
-     - claude
-     - cursor
-   ```
-
-4. **Validate:**
-   ```bash
-   tome bind
-   ```
-
-5. **Share:**
-   Push to GitHub and anyone can install with `tome learn yourusername/my-awesome-skills`
-
-## Example Collections
-
-- [kennyg/yegges-tips](https://github.com/kennyg/yegges-tips) - Steve Yegge's programming wisdom as agent prompts
-
-## How It Works
-
-Tome manages a library of "artifacts" - prompts, commands, and knowledge - stored in your `~/.tome` directory (or custom locations). Each artifact is linked to a GitHub repository, making it easy to version, share, and update collective intelligence.
-
-When you `tome learn` a collection, Tome:
-1. Fetches the repo and reads its `tome.yaml` manifest
-2. Installs artifacts to the appropriate locations for each AI agent
-3. Tracks metadata so you can update, remove, or inspect later
-
-Your AI agents automatically pick up these new skills in their context.
-
 ## Agent Support
 
-Tome works with all major AI coding agents:
-- **Claude Code** - Anthropic's official CLI
-- **Cursor** - The AI-first code editor
-- **Windsurf** - Codeium's agent environment
-- And more...
+| Agent | Skills | Commands | MCP | Status |
+|-------|--------|----------|-----|--------|
+| Claude Code | ✅ | ✅ | ✅ | Full support |
+| OpenCode | ✅ | ✅ | ✅ | Full support |
+| GitHub Copilot | ✅ | ✅ | — | Full support |
+| Cursor | ✅ | — | ✅ | Full support |
+| Windsurf | ✅ | — | — | Partial |
 
-Each agent has its own conventions for prompts and commands. Tome handles the details.
+## GitHub Token (Optional)
+
+For higher rate limits (5000 vs 60 requests/hour) or private repos:
+
+```bash
+export GITHUB_TOKEN=ghp_your_token_here
+```
+
+Tome auto-discovers tokens from `GITHUB_TOKEN`, `GH_TOKEN`, or gh CLI config.
 
 ## Philosophy
 
-**Knowledge should be shared, versioned, and reusable.**
+AI coding agents are converging on similar concepts—skills, prompts, MCP—but with different file formats. That fragmentation is temporary friction, not fundamental.
 
-Every team develops patterns. Every developer discovers tricks. Every project has domain context that would make AI agents more useful. But this knowledge lives in Slack messages, forgotten docs, and copy-paste buffers.
-
-Tome makes it first-class. Package it. Version it. Share it. Install it with one command.
-
-The grimoire awaits.
+Tome bridges the gap. Write your knowledge once, convert it everywhere.
 
 ---
 
-**Built with Go.** Inspired by every package manager that made development better.
-
-## License
-
-MIT
+**Built with Go.** MIT License.
