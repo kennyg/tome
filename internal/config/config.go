@@ -113,9 +113,17 @@ func findProjectRoot() string {
 		return ""
 	}
 
+	home, _ := os.UserHomeDir()
+
 	// Walk up the directory tree
 	dir := cwd
 	for {
+		// Never treat home directory as a project root
+		// (common to have .git there for dotfiles)
+		if dir == home {
+			return ""
+		}
+
 		// Check for .config/tome (attuned project)
 		candidate := filepath.Join(dir, ".config", ConfigDir)
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
