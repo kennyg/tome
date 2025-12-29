@@ -46,6 +46,12 @@ type artifactWithLocation struct {
 
 func runList(cmd *cobra.Command, args []string) {
 	agent := config.DefaultAgent()
+	if globalAgent != "" {
+		agent = config.Agent(globalAgent)
+		if config.GetAgentConfig(agent) == nil {
+			exitWithError(fmt.Sprintf("unknown agent: %s (try: claude, opencode, crush, cursor, windsurf)", globalAgent))
+		}
+	}
 
 	// Get the current agent's directory to filter artifacts
 	globalPaths, err := config.GetPathsForAgent(agent)

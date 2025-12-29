@@ -15,6 +15,9 @@ var (
 
 	// plainOutput forces plain text output without colors/decorations
 	plainOutput bool
+
+	// globalAgent overrides the default agent detection
+	globalAgent string
 )
 
 var rootCmd = &cobra.Command{
@@ -43,6 +46,7 @@ func Execute() error {
 func init() {
 	// Global flags
 	rootCmd.PersistentFlags().BoolVar(&plainOutput, "plain", false, "Force plain text output (no colors/decorations)")
+	rootCmd.PersistentFlags().StringVarP(&globalAgent, "agent", "a", "", "Target agent (claude, opencode, crush, cursor, windsurf)")
 
 	// Subcommands
 	rootCmd.AddCommand(aproposCmd)

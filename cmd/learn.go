@@ -45,14 +45,10 @@ Examples:
 	Run:  runLearn,
 }
 
-var (
-	learnGlobal bool
-	learnAgent  string
-)
+var learnGlobal bool
 
 func init() {
 	learnCmd.Flags().BoolVarP(&learnGlobal, "global", "g", false, "Install globally to ~/.<agent>/ instead of project-local")
-	learnCmd.Flags().StringVarP(&learnAgent, "agent", "a", "", "Target agent (claude, opencode, crush, cursor, windsurf)")
 }
 
 func runLearn(cmd *cobra.Command, args []string) {
@@ -69,10 +65,10 @@ func runLearn(cmd *cobra.Command, args []string) {
 
 	// Determine which agent to use
 	agent := config.DefaultAgent()
-	if learnAgent != "" {
-		agent = config.Agent(learnAgent)
+	if globalAgent != "" {
+		agent = config.Agent(globalAgent)
 		if config.GetAgentConfig(agent) == nil {
-			exitWithError(fmt.Sprintf("unknown agent: %s (try: claude, opencode, crush, cursor, windsurf)", learnAgent))
+			exitWithError(fmt.Sprintf("unknown agent: %s (try: claude, opencode, crush, cursor, windsurf)", globalAgent))
 		}
 	}
 
